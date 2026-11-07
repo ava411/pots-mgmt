@@ -85,6 +85,12 @@ const HEART = `<svg class="ob-heart" viewBox="0 0 130 100" aria-hidden="true">
   <g class="bob"><path class="h" d="M72 90C40 67 33 52 33 38c0-11 9-19 19-19 8 0 15 5 20 12 5-7 12-12 20-12 10 0 19 8 19 19 0 14-7 29-39 52z"/>
   <circle cx="60" cy="42" r="3.6" fill="#fff"/><circle cx="84" cy="42" r="3.6" fill="#fff"/><ellipse cx="72" cy="57" rx="4.2" ry="5.4" fill="#fff"/>
   <path class="drop" d="M112 16c4 6 4 9 0 11-4-2-4-5 0-11z"/></g></svg>`;
+// The first screen quotes a published source word for word, so the explanation isn't ours. Keep it a quotation.
+const SOURCE = {
+  text: "POTS is a complex, multi-system, chronic disorder of the autonomic nervous system characterized by orthostatic intolerance with excessive heart rate (HR) increase and symptoms on standing while blood pressure is maintained. The onset of POTS may be precipitated by a typical immunological stressor such as viral syndrome (often upper respiratory or gastrointestinal), physical trauma (such as concussion), menarche, pregnancy, or surgery.",
+  name: "Vernino and others, Autonomic Neuroscience, 2021",
+  url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8455420/"
+};
 function obChips(id, options, chosen, one) {
   return `<div class="chips big${one ? " one" : ""}" id="${id}">${options.map(([v, l]) => `<button data-v="${esc(v)}" class="${chosen.includes(v) ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`;
 }
@@ -116,7 +122,8 @@ function obScreen(name) {
   const a = ob.a, t = todayISO();
   switch (name) {
     case "hello": return `<div class="ob-art">${HEART}</div><h1 class="ob-h">So you have <span class="squiggle">POTS</span>.</h1>
-      <p class="ob-p">Postural orthostatic tachycardia syndrome. You stand up, blood pools in your legs, and your heart sprints to make up for it. It often follows a virus, a concussion or surgery, which can knock out the autonomic nervous system: the autopilot for your heart rate and blood vessels.</p>`;
+      <blockquote class="ob-p ob-quote" cite="${SOURCE.url}">${SOURCE.text}</blockquote>
+      <p class="ob-src">From the 2019 NIH expert consensus: <a href="${SOURCE.url}" target="_blank" rel="noopener">${SOURCE.name}</a></p>`;
     case "why": return `<h1 class="ob-h2">This app helps you manage your symptoms while maximising your ability to live a <span class="squiggle">flourishing</span> life.</h1><p class="ob-p">Everything you enter stays on this phone.</p>`;
     case "conditions": return `<h1 class="ob-h2">What are you managing?</h1><p class="ob-p">Tap all that apply.</p>${obChips("ob-cond", CONDITIONS, a.conditions)}`;
     case "intro": return `<h1 class="ob-h2">When you're ready, tell us about your symptoms.</h1><p class="ob-p">The more context you share, the better the plan. You can skip any question.</p>`;
