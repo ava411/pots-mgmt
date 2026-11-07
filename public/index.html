@@ -292,6 +292,34 @@ label.btn { cursor: pointer; }
 select { appearance: none; -webkit-appearance: none; }
 .topbar h1 { font-size: 1.35rem; }
 .w.long { font-size: .6rem; letter-spacing: -.01em; }
+/* Setup: big, playful type, one question per screen */
+body.ob-mode { background: radial-gradient(120% 60% at 100% 0%, var(--plum-soft) 0, transparent 55%), radial-gradient(110% 55% at 0% 100%, var(--accent-soft) 0, transparent 60%), var(--bg); background-attachment: fixed; }
+.ob { min-height: calc(100vh - 32px); min-height: calc(100dvh - 32px); display: flex; flex-direction: column; animation: obIn .35s ease both; }
+.ob-top { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.ob-top .btn.quiet { padding-left: 0; }
+.ob-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.ob-bar i { display: block; height: 100%; background: var(--accent); border-radius: 2px; transition: width .3s ease; }
+.ob-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 18px 2px; }
+.ob-h { font-size: clamp(2.7rem, 14vw, 3.8rem); font-weight: 800; line-height: .98; letter-spacing: -0.04em; margin: 0 0 22px; }
+.ob-h2 { font-size: clamp(1.65rem, 7.6vw, 2.2rem); font-weight: 760; line-height: 1.1; letter-spacing: -0.025em; margin: 0 0 12px; }
+.ob-p { font-size: .95rem; color: var(--ink-2); line-height: 1.5; margin: 0 0 18px; max-width: 34em; }
+.squiggle { position: relative; white-space: nowrap; color: var(--accent); }
+.squiggle::after { content: ""; position: absolute; left: -2%; right: -2%; bottom: -0.16em; height: .3em;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 8'%3E%3Cpath d='M0 4 Q 3 0 6 4 T 12 4 T 18 4 T 24 4' fill='none' stroke='%23E07A5F' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") repeat-x; background-size: auto 100%; }
+.ob-art { margin: 0 0 10px; } .ob-art.small .ob-heart { width: 84px; }
+.ob-heart { width: 132px; height: auto; overflow: visible; }
+.ob-heart .h { fill: #E07A5F; } .ob-heart .drop { fill: var(--blue); }
+.ob-heart .speed path { stroke: var(--accent); stroke-width: 5; stroke-linecap: round; animation: speed .9s ease-in-out infinite; }
+.ob-heart .speed path:nth-child(2) { animation-delay: .15s; } .ob-heart .speed path:nth-child(3) { animation-delay: .3s; }
+.ob-heart .bob { animation: bob .55s ease-in-out infinite alternate; transform-origin: 72px 60px; }
+.chips.big { gap: 8px; } .chips.big button { padding: 10px 14px; font-size: .95rem; border-radius: 14px; background: var(--surface); }
+.ob-actions { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; }
+.ob-hint, .ob-found { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-top: 12px; }
+.ob-plan li { padding: 10px 0; }
+@keyframes obIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes bob { from { transform: translateY(-3px) rotate(-2deg); } to { transform: translateY(3px) rotate(2deg); } }
+@keyframes speed { 0%, 100% { opacity: .25; transform: translateX(4px); } 50% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .ob, .ob-heart .bob, .ob-heart .speed path { animation: none; } }
 .cal-day .mig, .wk .mig { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink-2); }
 .legend .mig-key { width: 7px; height: 7px; border-radius: 50%; background: var(--ink-2); display: inline-block; }
 </style>

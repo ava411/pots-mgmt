@@ -159,3 +159,56 @@ test("spreadsheet export: one row per day, symptoms by name, quoted notes", () =
   assert.ok(head.includes("Headache") && head.includes("Light sensitivity"));
   assert.ok(row.startsWith(TODAY) && row.includes(',6,') && row.includes(',yes,') && row.endsWith('"late, loud dinner"'), row);
 });
+
+test("setup: answers become the plan, the week, the session and the symptoms to ask about", () => {
+  const s = C.settingsFromAnswers({ conditions: ["pots", "migraine"], age: 34, sex: "female", pem: "no", goodDay: "10to20", exercise: ["swim", "bike", "walk"],
+    outDays: ["tue", "thu"], symptoms: ["headache", "lightheaded", "nope"], cycle: "yes", lastPeriod: "2026-03-02", onset: "2026-02-01", symptomNote: " dizzy in showers ", other: "" }, TODAY);
+  assert.equal(s.plan.template, "pots");
+  assert.deepEqual(s.plan.week, { mon: "session", tue: "open", wed: "open", thu: "open", fri: "session", sat: "rest", sun: "session" }, "sessions on the days at home");
+  assert.deepEqual([s.plan.session.title, s.plan.session.minutes, s.plan.session.short], ["Lying or seated cardio: swimming or a stationary bike", 15, "Cardio"]);
+  assert.deepEqual([s.symptoms, s.age, s.ageAsOf, s.sex, s.onset, s.context.symptoms], [["headache", "lightheaded"], 34, TODAY, "female", "2026-02-01", "dizzy in showers"]);
+  assert.deepEqual([s.cycle.track, s.cycle.starts], [true, ["2026-03-02"]]);
+  assert.deepEqual(C.symptomKeys(s.conditions, ["fog"], s.symptoms), ["headache", "lightheaded", "fog"], "the evening asks about the chosen symptoms");
+});
+
+test("setup: no period questions after male; pacing after post-exertional malaise; a single kind of exercise names the session", () => {
+  assert.equal(C.asksCycle({ sex: "male" }), false);
+  assert.equal(C.asksCycle({ sex: "unsaid" }), true);
+  const m = C.settingsFromAnswers({ conditions: ["pots"], sex: "male", cycle: "yes", lastPeriod: "2026-03-02" }, TODAY);
+  assert.equal(m.cycle.track, false);
+  const p = C.settingsFromAnswers({ conditions: ["longcovid"], pem: "yes", goodDay: "lt10", exercise: ["home"] }, TODAY);
+  assert.deepEqual([p.plan.template, p.plan.session.minutes, p.plan.session.title], ["pacing", 5, "Gentle movement, lying or seated: exercises at home"]);
+  assert.deepEqual(C.weekFor("pacing", []), { mon: "session", tue: "rest", wed: "session", thu: "rest", fri: "open", sat: "open", sun: "rest" }, "pacing rests after sessions");
+  assert.equal(C.sessionFor("concussion", ["walk"]).short, "Walk");
+  assert.equal(C.settingsFromAnswers({ conditions: ["other"], pem: "no" }, TODAY).plan.template, "concussion", "other: light daily activity");
+});
+
+test("before and since the start, and where resting heart rate rose", () => {
+  const days = {};
+  for (let i = 0; i < 60; i++) {
+    const k = C.shiftISO("2026-01-01", i), after = k >= "2026-01-31";
+    days[k] = { wearable: { rhr: after ? 63 : 56, hrv: after ? 48 : 70, sleepHours: after ? 6.8 : 7.6 } };
+  }
+  const ba = C.beforeAfter(days, "2026-01-31");
+  assert.deepEqual([ba.rhr, ba.hrv], [{ before: 56, after: 63 }, { before: 70, after: 48 }]);
+  const shift = C.findShift(days);
+  assert.deepEqual([shift.date, shift.delta], ["2026-01-31", 7]);
+  const flat = {}; for (let i = 0; i < 60; i++) flat[C.shiftISO("2026-01-01", i)] = { wearable: { rhr: 58 + (i % 2) } };
+  assert.equal(C.findShift(flat), null, "no rise of 3 or more: nothing to report");
+  assert.equal(C.beforeAfter(days, ""), null);
+});
+
+test("heart-rate guide: your own number, resting heart rate plus 15 when pacing, else from age", () => {
+  const base = { rhr: { value: 60 }, hrv: { value: null }, steps: { value: null } };
+  const pots = settings({ age: 30, ageAsOf: "2025-01-01" });
+  assert.equal(C.ageNow(pots, TODAY), 31, "a year on, a year older");
+  assert.equal(C.hrCap(pots, base, TODAY), Math.round((220 - 31) * 0.7));
+  const pacing = settings({ age: 30, plan: C.newPlan("pacing", TODAY) });
+  assert.equal(C.hrCap(pacing, base, TODAY), 75);
+  assert.equal(C.hrCap(pacing, { rhr: { value: null } }, TODAY), Math.round(190 * 0.55));
+  const own = settings({ age: 30 }); own.plan.hrCap = 125;
+  assert.equal(C.hrCap(own, base, TODAY), 125);
+  assert.equal(C.hrCap(settings(), base, TODAY), null, "no age, no guide");
+  const p = C.planFor(TODAY, settings({ age: 40, ageAsOf: TODAY }), history(TODAY), TODAY);
+  assert.ok(p.lines.includes("Keep your heart rate under 126"), p.lines);
+});

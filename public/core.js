@@ -2,7 +2,7 @@
 // tested on its own. Everything below is a starting point that each person edits; nothing is tuned to one person.
 
 /* ============================ Conditions, symptoms, templates ============================ */
-export const CONDITIONS = [["pots", "POTS"], ["longcovid", "Long COVID"], ["concussion", "Post-concussion"], ["migraine", "Migraine"]];
+export const CONDITIONS = [["pots", "POTS"], ["migraine", "Migraine"], ["concussion", "Post-concussion"], ["longcovid", "Long COVID or respiratory illness"], ["other", "Other"]];
 export const SYMPTOMS = {
   headache: "Headache", dizzy: "Dizziness", lightheaded: "Lightheaded", legs: "Heavy legs", heart: "Racing heart",
   fatigue: "Fatigue", fog: "Brain fog", breath: "Breathless", eyes: "Eye strain", light: "Light sensitivity",
@@ -12,7 +12,8 @@ export const CONDITION_SYMPTOMS = {
   pots: ["lightheaded", "legs", "heart", "fatigue", "fog", "breath"],
   longcovid: ["fatigue", "fog", "breath", "heart", "pain", "sleep"],
   concussion: ["headache", "dizzy", "eyes", "light", "noise", "fog", "nausea"],
-  migraine: ["headache", "nausea", "light", "noise", "dizzy"]
+  migraine: ["headache", "nausea", "light", "noise", "dizzy"],
+  other: ["fatigue", "fog", "pain", "sleep", "headache", "dizzy"]
 };
 export const DOW = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 export const WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -50,14 +51,39 @@ export const PLAN_STEPS = { chores: 500, meetings: 1500, events: 2500, travel: 3
 export const PLAN_LABEL = { chores: "Chores", meetings: "In-person meetings", events: "Events", travel: "Travel" };
 // Baselines are medians of your own last 28 days; they need 7 days with the reading.
 export const BASELINE = { days: 28, min: 7 };
-export const DEFAULT_SETTINGS = { onboarded: false, conditions: [], pem: "no", cycle: { track: false, starts: [], length: 28 }, plan: null, reminders: { morning: "10:00", evening: "22:00" } };
+export const DEFAULT_SETTINGS = { onboarded: false, conditions: [], pem: "no", cycle: { track: false, starts: [], length: 28 }, plan: null, reminders: { morning: "10:00", evening: "22:00" },
+  onset: "", tracker: "", symptoms: [], exercise: [], goodDay: "", outDays: [], context: { symptoms: "", other: "" }, age: null, ageAsOf: "", sex: "" };
+export const SEXES = [["female", "Female"], ["male", "Male"], ["intersex", "Intersex"], ["unsaid", "Prefer not to say"]];
+// Periods are asked about unless the person said male at birth.
+export function asksCycle(x) { return !x || x.sex !== "male"; }
+export function ageNow(s, today) {
+  const a = num(s && s.age);
+  if (a == null) return null;
+  return isDate(s.ageAsOf) && isDate(today) ? a + Math.floor(daysBetween(parseISO(s.ageAsOf), parseISO(today)) / 365.25) : a;
+}
+// A heart-rate guide for sessions: the person's own number, else resting heart rate plus 15 when pacing, else 70
+// percent of the age-based maximum (220 minus age), 55 percent when pacing.
+export function hrCap(s, base, today) {
+  const P = s.plan || {}, own = num(P.hrCap);
+  if (own != null) return own;
+  const pacing = P.template === "pacing", age = ageNow(s, today);
+  if (pacing && base && base.rhr && base.rhr.value != null) return base.rhr.value + (TEMPLATES.pacing.hrAboveRest || 15);
+  return age != null ? Math.round((220 - age) * (pacing ? 0.55 : 0.7)) : null;
+}
+// Exercise people might manage at least once a week, by what they have access to.
+export const EXERCISES = [["home", "Exercises at home, no equipment"], ["gym", "Exercises with basic gym equipment"], ["swim", "Swimming"], ["bike", "A stationary or recumbent bike"],
+  ["cycle", "Cycling outdoors"], ["row", "A rowing machine"], ["walk", "Walking"], ["yoga", "Yoga or Pilates"]];
+const EXERCISE_WORD = { home: "exercises at home", gym: "gym exercises", swim: "swimming", bike: "a stationary bike", cycle: "cycling", row: "rowing", walk: "walking", yoga: "yoga or Pilates" };
+const EXERCISE_SHORT = { swim: "Pool", bike: "Bike", cycle: "Bike", row: "Row", walk: "Walk" };
+// How long a good day allows before symptoms build, and the first session length it gives.
+export const GOOD_DAY = [["lt10", "Under 10 minutes", 10], ["10to20", "10 to 20 minutes", 15], ["20to40", "20 to 40 minutes", 20], ["gt40", "Over 40 minutes", 30]];
 
 // Post-exertional malaise points to pacing, whatever else is chosen.
 export function pickTemplate(conditions, pem) {
   const has = c => (conditions || []).includes(c);
   if (pem === "yes" || (pem === "unsure" && has("longcovid"))) return "pacing";
   if (has("pots")) return "pots";
-  if (has("concussion")) return "concussion";
+  if (has("concussion") || has("other")) return "concussion";
   if (has("migraine")) return "migraine";
   return "pacing";
 }
@@ -67,10 +93,11 @@ export function newPlan(template, start) {
     steps: { open: null, session: null, rest: null }, limits: Object.assign({}, DEFAULT_LIMITS), bedtime: "", note: "" };
 }
 // The symptoms the evening asks about: those of the chosen conditions, in that order, plus any already logged.
-export function symptomKeys(conditions, logged = []) {
+export function symptomKeys(conditions, logged = [], chosen = []) {
   const out = [];
   const list = conditions && conditions.length ? conditions : CONDITIONS.map(c => c[0]);
-  list.forEach(c => (CONDITION_SYMPTOMS[c] || []).forEach(k => { if (!out.includes(k)) out.push(k); }));
+  if (chosen && chosen.length) chosen.forEach(k => { if (SYMPTOMS[k] && !out.includes(k)) out.push(k); });
+  else list.forEach(c => (CONDITION_SYMPTOMS[c] || []).forEach(k => { if (!out.includes(k)) out.push(k); }));
   logged.forEach(k => { if (!out.includes(k)) out.push(k); });
   return out;
 }
@@ -239,7 +266,8 @@ export function planFor(dateStr, s, days, today) {
   if (ceiling != null) lines.push(`Up to ${n0(ceiling)} steps` + (load ? `; your plans take about ${n0(load)}` : ""));
   if (type === "session") lines.push(`${P.session.title}, ${minutes} min`);
   if (type === "light") lines.push(`${P.session.title}, ${Math.max(5, Math.round(minutes / 2))} min, easy`);
-  if ((type === "session" || type === "light") && T.hrAboveRest && base.rhr.value != null) lines.push(`Keep your heart rate under ${base.rhr.value + T.hrAboveRest}`);
+  const cap = hrCap(s, base, today);
+  if ((type === "session" || type === "light") && cap != null) lines.push(`Keep your heart rate under ${cap}`);
   if (fmtBed(P.bedtime)) lines.push(`In bed by ${fmtBed(P.bedtime)}`);
   if (P.note) lines.push(P.note);
   const notes = [];
@@ -359,4 +387,86 @@ export function exportCSV(days, s, today) {
       yn(ev.migraine), yn(ev.rescue), yn(ev.crash), ((e.wearable && e.wearable.workouts) || []).map(w => w.name).join("; "), ev.notes || ""].map(cell).join(","));
   }
   return out.join("\r\n") + "\r\n";
+}
+
+/* ============================ Setup: answers into a plan ============================ */
+const joinOr = a => a.length <= 1 ? (a[0] || "") : a.slice(0, -1).join(", ") + " or " + a[a.length - 1];
+// The template's number of session and rest days, placed on the days the person is home: sessions spread out, rest
+// after sessions when pacing, else at the weekend.
+export function weekFor(template, outDays = []) {
+  const T = TEMPLATES[template] || TEMPLATES.pacing;
+  const nSession = WEEK.filter(d => T.week[d] === "session").length, nRest = WEEK.filter(d => T.week[d] === "rest").length;
+  const home = WEEK.filter(d => !outDays.includes(d)), sessions = [];
+  for (let i = 0; i < home.length && sessions.length < nSession; i += 2) sessions.push(home[i]);
+  for (let i = 1; i < home.length && sessions.length < nSession; i += 2) sessions.push(home[i]);
+  const left = home.filter(d => !sessions.includes(d));
+  const afterSession = d => sessions.includes(WEEK[(WEEK.indexOf(d) + 6) % 7]);
+  const rank = d => template === "pacing" ? (afterSession(d) ? 0 : (d === "sun" ? 1 : 2)) : (d === "sun" ? 0 : (d === "sat" ? 1 : 2));
+  const rests = left.slice().sort((a, b) => rank(a) - rank(b) || WEEK.indexOf(a) - WEEK.indexOf(b)).slice(0, nRest);
+  const week = {};
+  WEEK.forEach(d => { week[d] = sessions.includes(d) ? "session" : (rests.includes(d) ? "rest" : "open"); });
+  return week;
+}
+// The session in the person's own terms: the template's kind of activity, done with what they have.
+export function sessionFor(template, exercise = [], goodDay = "") {
+  const T = TEMPLATES[template] || TEMPLATES.pacing, S = Object.assign({}, T.session);
+  const cardio = ["swim", "bike", "row", "cycle", "walk"].filter(k => exercise.includes(k));
+  const seated = ["swim", "bike", "row"].filter(k => exercise.includes(k));
+  if (template === "pots" && (seated.length || cardio.length)) S.title = "Lying or seated cardio: " + joinOr((seated.length ? seated : cardio).map(k => EXERCISE_WORD[k]));
+  if (template === "pacing" && (exercise.includes("home") || exercise.includes("yoga"))) S.title = "Gentle movement, lying or seated: " + joinOr(["home", "yoga"].filter(k => exercise.includes(k)).map(k => EXERCISE_WORD[k]));
+  if (template === "concussion" && cardio.length) S.title = "Easy " + joinOr(cardio.map(k => EXERCISE_WORD[k])) + ". Stop if symptoms rise by 2 or more";
+  if (template === "migraine" && exercise.length) S.title = "Easy " + joinOr(exercise.map(k => EXERCISE_WORD[k]));
+  const used = template === "pots" ? (seated.length ? seated : cardio) : cardio;
+  if (template !== "pacing" && used.length && new Set(used.map(k => EXERCISE_SHORT[k])).size === 1) S.short = EXERCISE_SHORT[used[0]];
+  const g = GOOD_DAY.find(x => x[0] === goodDay);
+  if (g) S.minutes = template === "pacing" ? (goodDay === "lt10" ? 5 : 10) : Math.min(g[2], S.maxMinutes);
+  S.maxMinutes = Math.max(S.minutes, S.maxMinutes);
+  return S;
+}
+// Medians before and since the start of the illness or injury: up to 90 days before, everything after.
+export function beforeAfter(days, onset) {
+  if (!isDate(onset)) return null;
+  const keys = Object.keys(days).filter(isDate), from = shiftISO(onset, -90), out = {};
+  const pick = { rhr: e => readingsOf(e).rhr, hrv: e => readingsOf(e).hrv, sleep: e => readingsOf(e).sleep, steps: stepsOf };
+  for (const [f, get] of Object.entries(pick)) {
+    const before = keys.filter(k => k >= from && k < onset).map(k => get(days[k])).filter(v => v != null);
+    const after = keys.filter(k => k >= onset).map(k => get(days[k])).filter(v => v != null);
+    if (before.length >= 7 && after.length >= 7) out[f] = { before: median(before), after: median(after) };
+  }
+  return Object.keys(out).length ? out : null;
+}
+// The day resting heart rate rose most: compares the 28 days before and after each day (14 readings each side at
+// least). A rise under 3 beats is not reported.
+export function findShift(days) {
+  const keys = Object.keys(days).filter(isDate).sort(), rhr = {};
+  keys.forEach(k => { const v = readingsOf(days[k]).rhr; if (v != null) rhr[k] = v; });
+  const dated = Object.keys(rhr);
+  if (dated.length < 28) return null;
+  let best = null;
+  for (let d = parseISO(dated[0]), end = parseISO(dated[dated.length - 1]); d <= end; d = addDays(d, 1)) {
+    const k = iso(d), before = [], after = [];
+    for (let i = 1; i <= 28; i++) { const b = rhr[shiftISO(k, -i)], a = rhr[shiftISO(k, i - 1)]; if (b != null) before.push(b); if (a != null) after.push(a); }
+    if (before.length < 14 || after.length < 14) continue;
+    // Averages peak exactly at the change; medians would tie for two weeks either side of it.
+    const mean = x => x.reduce((t, v) => t + v, 0) / x.length, delta = Math.round((mean(after) - mean(before)) * 10) / 10;
+    if (!best || delta > best.delta) best = { date: k, before: median(before), after: median(after), delta };
+  }
+  return best && best.delta >= 3 ? best : null;
+}
+// Everything setup asked, as settings: the plan, the week, the session, the symptoms to ask about, the cycle.
+export function settingsFromAnswers(a, today) {
+  const conditions = (a.conditions || []).filter(c => CONDITIONS.some(x => x[0] === c));
+  const pem = a.pem || "unsure", template = pickTemplate(conditions, pem);
+  const plan = newPlan(template, today);
+  plan.week = weekFor(template, a.outDays || []);
+  plan.session = sessionFor(template, a.exercise || [], a.goodDay || "");
+  const track = asksCycle(a) && a.cycle === "yes", age = num(a.age);
+  return Object.assign({}, DEFAULT_SETTINGS, {
+    onboarded: true, conditions, pem, plan,
+    cycle: { track, starts: track && isDate(a.lastPeriod) ? [a.lastPeriod] : [], length: 28 },
+    onset: isDate(a.onset) ? a.onset : "", tracker: a.tracker || "", symptoms: (a.symptoms || []).filter(k => SYMPTOMS[k]),
+    exercise: a.exercise || [], goodDay: a.goodDay || "", outDays: a.outDays || [],
+    context: { symptoms: (a.symptomNote || "").trim(), other: (a.other || "").trim() },
+    age: age != null && age >= 10 && age <= 110 ? Math.round(age) : null, ageAsOf: today, sex: SEXES.some(x => x[0] === a.sex) ? a.sex : ""
+  });
 }

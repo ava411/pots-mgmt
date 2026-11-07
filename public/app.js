@@ -75,17 +75,107 @@ const plan = (k, today = todayISO()) => C.planFor(k, S(), store.days, today);
 const seg = (cur, v, label) => `<button data-v="${esc(v)}" class="${cur === v ? "on" : ""}">${esc(label)}</button>`;
 const segVal = id => { const b = document.querySelector(`#${id} button.on`); return b ? b.dataset.v : null; };
 
-/* ============================ Setup ============================ */
+/* ============================ Setup: a few screens, then a questionnaire ============================ */
+const OB_STEPS = ["hello", "why", "conditions", "intro", "about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "cycle", "other", "plan"];
+const QUESTIONS = ["about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "cycle", "other"];
+const blankAnswers = () => ({ conditions: [], age: "", sex: "", tracker: "", onset: "", symptoms: [], symptomNote: "", exercise: [], pem: "", goodDay: "", outDays: [], cycle: "", lastPeriod: "", other: "" });
+const ob = { step: 0, a: blankAnswers(), health: false };
+const HEART = `<svg class="ob-heart" viewBox="0 0 130 100" aria-hidden="true">
+  <g class="speed"><path d="M6 40h20"/><path d="M0 54h24"/><path d="M8 68h16"/></g>
+  <g class="bob"><path class="h" d="M72 90C40 67 33 52 33 38c0-11 9-19 19-19 8 0 15 5 20 12 5-7 12-12 20-12 10 0 19 8 19 19 0 14-7 29-39 52z"/>
+  <circle cx="60" cy="42" r="3.6" fill="#fff"/><circle cx="84" cy="42" r="3.6" fill="#fff"/><ellipse cx="72" cy="57" rx="4.2" ry="5.4" fill="#fff"/>
+  <path class="drop" d="M112 16c4 6 4 9 0 11-4-2-4-5 0-11z"/></g></svg>`;
+function obChips(id, options, chosen, one) {
+  return `<div class="chips big${one ? " one" : ""}" id="${id}">${options.map(([v, l]) => `<button data-v="${esc(v)}" class="${chosen.includes(v) ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`;
+}
+function historyLine() {
+  const keys = Object.keys(store.days).filter(k => store.days[k].wearable).sort();
+  return keys.length ? `<p class="small ob-found"><b>${n0(keys.length)} days</b> of history, from ${esc(fmtShort(parseISO(keys[0])))} ${parseISO(keys[0]).getFullYear()}.</p>` : "";
+}
+function connectBlock() {
+  const t = ob.a.tracker, whoopFile = `<p class="small">WHOOP's recovery scores come from its data export: request it in the WHOOP app, unzip the file WHOOP sends, and choose physiological_cycles.csv and workouts.csv.</p><label class="btn block" for="ob-whoop">Import WHOOP files</label><input type="file" id="ob-whoop" accept=".csv,text/csv" multiple hidden>`;
+  let out = "";
+  if ((t === "apple" || t === "whoop") && Health) out = `<button class="btn primary block" data-act="ob-health">${ob.health ? "Read Apple Health again" : "Connect Apple Health"}</button>` + (t === "whoop" ? `<p class="small muted" style="margin-top:8px">Turn on Apple Health sync in the WHOOP app first.</p>` + whoopFile : "");
+  else if (t === "apple") out = `<p class="small">Apple Watch data comes in through the POTS Tracker iPhone app. Here, type your numbers in the morning check-in.</p>`;
+  else if (t === "whoop") out = whoopFile;
+  else if (t) out = `<p class="small">No problem. Type what you know in the morning check-in, or skip it.</p>`;
+  return out + historyLine();
+}
+function onsetExtras() {
+  const shift = C.findShift(store.days), ba = C.beforeAfter(store.days, ob.a.onset);
+  let out = "";
+  if (shift && shift.date !== ob.a.onset) out += `<p class="small ob-hint">Your resting heart rate rose by about ${Math.round(shift.delta)} around ${esc(fmtLong(parseISO(shift.date)))}, ${parseISO(shift.date).getFullYear()}. <button class="btn quiet inline" data-act="ob-use-shift" data-v="${shift.date}">Use that date</button></p>`;
+  if (ba) {
+    const part = (f, label, unit = "") => ba[f] ? `${label} ${Math.round(ba[f].before * 10) / 10}${unit} before, ${Math.round(ba[f].after * 10) / 10}${unit} since` : "";
+    const parts = [part("rhr", "resting heart rate"), part("hrv", "HRV"), part("sleep", "sleep", " h")].filter(Boolean);
+    if (parts.length) out += `<p class="small ob-found">${esc(capFirst(parts.join("; ")))}.</p>`;
+  }
+  return out;
+}
+function obScreen(name) {
+  const a = ob.a, t = todayISO();
+  switch (name) {
+    case "hello": return `<div class="ob-art">${HEART}</div><h1 class="ob-h">So you have <span class="squiggle">POTS</span>.</h1>
+      <p class="ob-p">Postural orthostatic tachycardia syndrome. You stand up, blood pools in your legs, and your heart sprints to make up for it. It often follows a virus, a concussion or surgery, which can knock out the autonomic nervous system: the autopilot for your heart rate and blood vessels.</p>`;
+    case "why": return `<h1 class="ob-h2">This app helps you manage your symptoms while maximising your ability to live a <span class="squiggle">flourishing</span> life.</h1><p class="ob-p">Everything you enter stays on this phone.</p>`;
+    case "conditions": return `<h1 class="ob-h2">What are you managing?</h1><p class="ob-p">Tap all that apply.</p>${obChips("ob-cond", CONDITIONS, a.conditions)}`;
+    case "intro": return `<h1 class="ob-h2">When you're ready, tell us about your symptoms.</h1><p class="ob-p">The more context you share, the better the plan. You can skip any question.</p>`;
+    case "about": return `<h1 class="ob-h2">A little about you</h1>
+      <label class="f" for="ob-age">Age</label><input type="number" id="ob-age" inputmode="numeric" min="10" max="110" value="${esc(a.age)}">
+      <label class="f">Sex at birth</label>${obChips("ob-sex", C.SEXES, [a.sex], true)}
+      <p class="small muted">Age sets your heart-rate guide. Sex decides whether we ask about periods.</p>`;
+    case "tracker": return `<h1 class="ob-h2">Do you wear a health tracker?</h1><p class="ob-p">Your history shows where your numbers usually sit, and how they changed.</p>
+      ${obChips("ob-tracker", [["apple", "Apple Watch"], ["whoop", "WHOOP"], ["other", "Another tracker"], ["none", "None"]], [a.tracker], true)}<div id="ob-connect">${connectBlock()}</div>`;
+    case "onset": return `<h1 class="ob-h2">When did it start?</h1><p class="ob-p">The illness or injury that set this off. Roughly is fine.</p>
+      <input type="date" id="ob-onset" value="${esc(a.onset)}" max="${t}"><div id="ob-onset-more">${onsetExtras()}</div>`;
+    case "symptoms": {
+      const first = C.symptomKeys(a.conditions), all = first.concat(Object.keys(SYMPTOMS).filter(k => !first.includes(k)));
+      return `<h1 class="ob-h2">What have you been feeling since?</h1><p class="ob-p">Tap all that apply. These become your evening check-in.</p>
+        ${obChips("ob-sym", all.map(k => [k, SYMPTOMS[k]]), a.symptoms)}
+        <label class="f" for="ob-sym-note">Anything particularly important?</label><textarea id="ob-sym-note" placeholder="Optional">${esc(a.symptomNote)}</textarea>`;
+    }
+    case "exercise": return `<h1 class="ob-h2">What could you do at least once a week?</h1><p class="ob-p">Pick anything you have access to. Easy, lying or seated versions count.</p>${obChips("ob-ex", C.EXERCISES, a.exercise)}`;
+    case "energy": return `<h1 class="ob-h2">Your energy</h1>
+      <label class="f">Do your symptoms get worse a day or two after doing too much?</label><div class="seg" id="ob-pem">${seg(a.pem, "yes", "Yes")}${seg(a.pem, "no", "No")}${seg(a.pem, "unsure", "Not sure")}</div>
+      <label class="f">On a good day, how long can you stay active before symptoms build?</label>${obChips("ob-good", C.GOOD_DAY.map(g => [g[0], g[1]]), [a.goodDay], true)}`;
+    case "week": return `<h1 class="ob-h2">Which days are you out for work, study or other commitments?</h1><p class="ob-p">Sessions go on the other days.</p>${obChips("ob-out", WEEK.map(d => [d, capFirst(d)]), a.outDays)}`;
+    case "cycle": return `<h1 class="ob-h2">Do your symptoms change with your cycle?</h1>${obChips("ob-cycle", [["no", "No"], ["yes", "Yes"], ["na", "Doesn't apply"]], [a.cycle], true)}
+      <div id="ob-cycle-more"${a.cycle === "yes" ? "" : " hidden"}><label class="f" for="ob-period">When did your last period start?</label><input type="date" id="ob-period" value="${esc(a.lastPeriod)}" max="${t}">${Health ? `<p class="small muted">Periods you log in Apple Health fill in by themselves.</p>` : ""}</div>`;
+    case "other": return `<h1 class="ob-h2">Anything else we should know?</h1><p class="ob-p">Treatments, triggers, what a good day looks like. It stays on this phone.</p><textarea id="ob-other" rows="5">${esc(a.other)}</textarea>`;
+    case "plan": {
+      const s = C.settingsFromAnswers(a, t), P = s.plan, T = TEMPLATES[P.template], base = C.baselines(store.days, t), steps = C.stepLimits(P, base), ba = C.beforeAfter(store.days, s.onset);
+      const sessionDays = WEEK.filter(d => P.week[d] === "session").map(capFirst), lines = [];
+      lines.push(`<b>${esc(T.label)}.</b> ${esc(T.about)}`);
+      if (sessionDays.length) lines.push(`${esc(P.session.title)}, ${P.session.minutes} min, on ${esc(sessionDays.join(", ").replace(/, ([^,]*)$/, " and $1"))}.` + (num(P.session.addPerWeek) ? ` A little longer each week, up to ${P.session.maxMinutes}.` : ""));
+      if (steps.open != null) lines.push(`Up to about ${n0(steps.open)} steps on days without a session, from your own usual.`);
+      if (ba && ba.rhr) lines.push(`Since ${esc(fmtShort(parseISO(s.onset)))}: resting heart rate ${Math.round(ba.rhr.after)}, against ${Math.round(ba.rhr.before)} before` + (ba.hrv ? `; HRV ${Math.round(ba.hrv.after)}, against ${Math.round(ba.hrv.before)}.` : "."));
+      if (s.symptoms.length) lines.push(`Your evening check-in asks about ${esc(s.symptoms.map(k => SYMPTOMS[k].toLowerCase()).join(", ").replace(/, ([^,]*)$/, " and $1"))}.`);
+      if (s.cycle.track) lines.push("Sessions hold steady in the week before a period.");
+      return `<div class="ob-art small">${HEART}</div><h1 class="ob-h2">Here's your plan.</h1><ul class="clean lines ob-plan">${lines.map(l => `<li>${l}</li>`).join("")}</ul><p class="ob-p">You can change any of it in Settings.</p>`;
+    }
+  }
+  return "";
+}
+function obCollect() {
+  const a = ob.a, name = OB_STEPS[ob.step], on = id => Array.from(document.querySelectorAll(`#${id} button.on`)).map(x => x.dataset.v), v = id => ($(id) || {}).value || "";
+  if (name === "conditions") a.conditions = on("ob-cond");
+  if (name === "about") { const g = num(v("ob-age")); a.age = g != null && g >= 10 && g <= 110 ? Math.round(g) : ""; a.sex = on("ob-sex")[0] || ""; }
+  if (name === "tracker") a.tracker = on("ob-tracker")[0] || "";
+  if (name === "onset") a.onset = isDate(v("ob-onset")) ? v("ob-onset") : "";
+  if (name === "symptoms") { a.symptoms = on("ob-sym"); a.symptomNote = v("ob-sym-note"); }
+  if (name === "exercise") a.exercise = on("ob-ex");
+  if (name === "energy") { a.pem = segVal("ob-pem") || ""; a.goodDay = on("ob-good")[0] || ""; }
+  if (name === "week") a.outDays = on("ob-out");
+  if (name === "cycle") { a.cycle = on("ob-cycle")[0] || ""; a.lastPeriod = isDate(v("ob-period")) ? v("ob-period") : ""; }
+  if (name === "other") a.other = v("ob-other");
+}
 function viewSetup() {
-  const chips = CONDITIONS.map(([k, l]) => `<button data-v="${k}">${l}</button>`).join("");
-  return `<div class="card"><h2>Welcome</h2>
-    <p>A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine. Everything you enter stays on this phone.</p>
-    <label class="f">What are you managing? Tap all that apply.</label><div class="chips" id="o-cond">${chips}</div>
-    <label class="f">Do your symptoms get worse a day or two after doing too much?</label>
-    <div class="seg" id="o-pem">${seg("", "yes", "Yes")}${seg("", "no", "No")}${seg("", "unsure", "Not sure")}</div>
-    <label class="f">Track your cycle?</label><div class="seg" id="o-cycle">${seg("no", "no", "No")}${seg("no", "yes", "Yes")}</div>
-    <div id="o-cycle-more" hidden><label class="f" for="o-start">When did your last period start?</label><input type="date" id="o-start" max="${todayISO()}"></div>
-    <div style="margin-top:16px"><button class="btn primary block" data-act="setup-done">Start</button></div></div>`;
+  const name = OB_STEPS[ob.step], last = ob.step === OB_STEPS.length - 1, q = QUESTIONS.includes(name);
+  const next = name === "intro" ? "Let's go" : (last ? "Start" : "Next");
+  const back = ob.step ? `<button class="btn quiet" data-act="ob-back">‹ Back</button>` : `<span></span>`;
+  return `<div class="ob ob-${name}"><div class="ob-top">${back}<div class="ob-bar"><i style="width:${Math.round(100 * (ob.step + 1) / OB_STEPS.length)}%"></i></div></div>
+    <div class="ob-body">${obScreen(name)}</div>
+    <div class="ob-actions"><button class="btn primary block" data-act="${last ? "ob-start" : "ob-next"}">${next}</button>${q ? `<button class="btn quiet block" data-act="ob-next">Skip</button>` : ""}</div></div>`;
 }
 
 /* ============================ Today ============================ */
@@ -227,7 +317,7 @@ const EVENTS = ["Long time standing", "Office", "Event", "Travel", "Heat", "Late
 function eveningForm() {
   const t = checkinDay(), e = (store.days[t] || {}).evening || {}, wSteps = num(((store.days[t] || {}).wearable || {}).steps);
   const sym = e.symptoms || {}, had = k => Object.prototype.hasOwnProperty.call(sym, k);
-  const keys = C.symptomKeys(S().conditions, Object.keys(sym));
+  const keys = C.symptomKeys(S().conditions, Object.keys(sym), S().symptoms);
   const chips = keys.map(k => `<button data-k="${k}" class="${had(k) ? "on" : ""}">${esc(SYMPTOMS[k] || k)}</button>`).join("");
   const boxes = keys.map(k => `<div data-k="${k}"${had(k) ? "" : " hidden"}><label class="f" for="e-s-${k}">${esc(SYMPTOMS[k] || k)}, 0 to 10</label><input type="number" min="0" max="10" inputmode="numeric" id="e-s-${k}" value="${esc(sym[k] != null ? sym[k] : "")}"></div>`).join("");
   const yn = (id, label, v) => `<label class="f">${label}</label><div class="seg" id="${id}">${seg(v === true ? "yes" : "no", "no", "No")}${seg(v === true ? "yes" : "no", "yes", "Yes")}</div>`;
@@ -377,12 +467,13 @@ function viewSettings() {
     <div class="form-grid three">${numIn("p-steps-open", "Steps, no session", P.steps.open, auto.open != null ? n0(auto.open) : "")}${numIn("p-steps-session", "Steps, session day", P.steps.session, auto.session != null ? n0(auto.session) : "")}${numIn("p-steps-rest", "Steps, rest day", P.steps.rest, auto.rest != null ? n0(auto.rest) : "")}</div>
     <p class="small muted">${auto.open != null ? "Left blank, steps follow your own: about " + n0(auto.open) + " a day." : "Left blank, steps follow your own once there are 7 days of them."}</p>
     <div class="form-grid"><div><label class="f" for="p-bed">In bed by</label><input type="time" id="p-bed" value="${esc(P.bedtime)}"></div>${numIn("p-sleep", "Shortest night before rest (hours)", L.sleepMin, "", "decimal")}</div>
+    ${numIn("p-hr", "Heart rate guide in sessions", P.hrCap, (() => { const c = C.hrCap(Object.assign({}, s, { plan: Object.assign({}, P, { hrCap: null }) }), base, todayISO()); return c != null ? String(c) : ""; })())}
     <label class="f" for="p-note">A line to show every day</label><input type="text" id="p-note" value="${esc(P.note)}" placeholder="For example: 2.5 L of fluid">
     <details style="margin-top:12px"><summary>Limits</summary>
       <div class="form-grid">${numIn("p-l-rhr", "Resting heart rate above your usual by", L.rhrAbove)}${numIn("p-l-hrv", "HRV below your usual by (%)", L.hrvBelowPct)}${numIn("p-l-sa", "Symptoms for a light day, from", L.symptomAmber)}${numIn("p-l-sr", "Symptoms for a rest day, from", L.symptomRed)}${C.hasCondition(s, "pots") ? numIn("p-l-ra", "Standing rise for a light day, from", L.riseAmber) + numIn("p-l-rr", "Standing rise for a rest day, from", L.riseRed) : ""}</div>
     </details>
     <div style="margin-top:12px"><button class="btn primary block" data-act="save-plan">Save</button></div></div>`;
-  out += `<div class="card"><h2>Your cycle</h2><div class="seg" id="s-cycle">${seg(s.cycle.track ? "yes" : "no", "no", "Don't track")}${seg(s.cycle.track ? "yes" : "no", "yes", "Track")}</div>
+  if (C.asksCycle(s)) out += `<div class="card"><h2>Your cycle</h2><div class="seg" id="s-cycle">${seg(s.cycle.track ? "yes" : "no", "no", "Don't track")}${seg(s.cycle.track ? "yes" : "no", "yes", "Track")}</div>
     <div id="s-cycle-more"${s.cycle.track ? "" : " hidden"}><label class="f" for="s-starts">Period start dates, oldest first</label><input type="text" id="s-starts" value="${esc(C.cycleStarts(s).join(", "))}" placeholder="YYYY-MM-DD">
     ${numIn("s-len", "Usual cycle length (days)", s.cycle.length)}</div>
     <div style="margin-top:12px"><button class="btn primary block" data-act="save-cycle">Save</button></div></div>`;
@@ -392,6 +483,9 @@ function viewSettings() {
     <label class="btn block" for="s-whoop">Import WHOOP files</label><input type="file" id="s-whoop" accept=".csv,text/csv" multiple hidden></div>`;
   out += `<div class="card"><h2>Reminders</h2><div class="form-grid"><div><label class="f" for="s-rm">Morning</label><input type="time" id="s-rm" value="${esc(s.reminders.morning)}"></div><div><label class="f" for="s-re">Evening</label><input type="time" id="s-re" value="${esc(s.reminders.evening)}"></div></div>
     <div style="margin-top:12px">${Notes ? `<button class="btn primary block" data-act="reminders-on">${s.remindersOn ? "Update reminders" : "Turn on reminders"}</button>${s.remindersOn ? `<button class="btn quiet block" data-act="reminders-off">Turn off</button>` : ""}` : `<button class="btn primary block" data-act="reminders-ics">Add to my calendar</button>`}</div></div>`;
+  const age = C.ageNow(s, todayISO()), sexLabel = (C.SEXES.find(x => x[0] === s.sex) || [])[1];
+  const about = [[age != null ? `Age ${age}` : "", sexLabel && s.sex !== "unsaid" ? sexLabel.toLowerCase() : ""].filter(Boolean).join(", "), s.onset ? `Started ${fmtLong(parseISO(s.onset))}, ${parseISO(s.onset).getFullYear()}.` : "", s.context.symptoms, s.context.other].filter(Boolean).map(capFirst);
+  out += `<div class="card"><h2>About you</h2>${about.map(x => `<p class="small">${esc(x)}</p>`).join("")}<button class="btn block" data-act="redo-setup">Run setup again</button></div>`;
   out += `<div class="card"><h2>Your data</h2><p>Everything stays on this phone. Save a backup now and then, and keep it somewhere safe.</p>
     <div class="actions"><button class="btn block" data-act="backup">Save a backup</button><label class="btn block" for="s-restore">Restore a backup</label><input type="file" id="s-restore" accept=".json,application/json" hidden><button class="btn block" data-act="csv">Download a spreadsheet</button><button class="btn quiet block danger" data-act="wipe">Delete everything</button></div></div>`;
   return out;
@@ -417,14 +511,14 @@ function startsFromFlow(byDate) {
   flow.forEach((d, i) => { if (!i || C.daysBetween(parseISO(flow[i - 1]), parseISO(d)) >= 10) out.push(d); });
   return out;
 }
-async function readHealth(daysBack) {
-  if (!Health || !S().health) return 0;
+async function readHealth(daysBack, force) {
+  if (!Health || !(S().health || force)) return 0;
   try {
     const r = await Health.readDays({ from: shiftISO(todayISO(), -daysBack), to: todayISO() });
     const byDate = (r && r.days) || {}, clean = {};
     for (const [d, v] of Object.entries(byDate)) { const w = Object.assign({}, v); delete w.flow; clean[d] = w; }
     const n = store.mergeWearable(clean, "health");
-    if (S().cycle.track) {
+    if (S().cycle.track || force) {
       const starts = startsFromFlow(byDate);
       if (starts.length) { const s = Object.assign({}, S()); s.cycle = Object.assign({}, s.cycle, { starts: Array.from(new Set(C.cycleStarts(s).concat(starts))).sort() }); store.saveSettings(s); }
     }
@@ -452,14 +546,15 @@ const TABS = [
   ["settings", "Settings", `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>`]
 ];
 function render() {
-  const app = $("app"), s = S(), setup = !s.onboarded, inCheckin = ["morning", "evening", "checkin"].includes(ui.view);
+  const app = $("app"), s = S(), setup = !s.onboarded || ui.redo, inCheckin = ["morning", "evening", "checkin"].includes(ui.view);
   ui.dirty = false;
   let body;
   if (setup) body = viewSetup();
   else if (inCheckin) body = viewCheckin(ui.view);
   else body = { today: viewToday, calendar: viewCalendar, review: viewReview, settings: viewSettings }[ui.view]();
   const warn = store.ok ? "" : `<div class="banner rest">This browser isn't keeping data. On an iPhone, add the app to your home screen.</div>`;
-  app.innerHTML = `<div class="topbar"><h1>POTS Tracker</h1></div>` + warn + body;
+  app.innerHTML = (setup ? "" : `<div class="topbar"><h1>POTS Tracker</h1></div>`) + warn + body;
+  document.body.classList.toggle("ob-mode", setup);
   document.querySelector(".tabbar").hidden = setup || inCheckin;
   $("tabs").innerHTML = TABS.map(([id, label, icon]) => `<button class="${ui.view === id ? "on" : ""}" data-view="${id}">${icon}<span>${label}</span></button>`).join("");
 }
@@ -475,10 +570,11 @@ $("app").addEventListener("input", e => {
   const id = e.target.id;
   if (id === "m-scale") $("m-scale-v").textContent = e.target.value;
   if (["m-hr0", "m-hr1", "m-hr3", "m-rhr"].includes(id)) updateRise();
+  if (id === "ob-onset") { ob.a.onset = isDate(e.target.value) ? e.target.value : ""; $("ob-onset-more").innerHTML = onsetExtras(); }
 });
 $("app").addEventListener("change", async e => {
   const id = e.target.id;
-  if (id === "s-whoop" && e.target.files.length) {
+  if ((id === "s-whoop" || id === "ob-whoop") && e.target.files.length) {
     let n = 0;
     for (const f of e.target.files) {
       const text = await f.text(), kind = C.whoopFileKind(text);
@@ -486,7 +582,7 @@ $("app").addEventListener("change", async e => {
       else if (kind === "workouts") { const w = C.parseWhoopWorkouts(text), byDate = {}; for (const [d, list] of Object.entries(w)) byDate[d] = { workouts: list }; n += store.mergeWearable(byDate, "whoop"); }
     }
     toast(n ? `Read ${n} ${n === 1 ? "day" : "days"} from WHOOP` : "No WHOOP days found in that file");
-    render();
+    if (id === "ob-whoop") $("ob-connect").innerHTML = connectBlock(); else render();
   }
   if (id === "s-restore" && e.target.files.length) {
     try {
@@ -502,10 +598,11 @@ $("app").addEventListener("click", async e => {
   if (chip) {
     ui.dirty = true;
     const box = chip.parentElement;
-    if (box.classList.contains("seg")) { box.querySelectorAll("button").forEach(b => b.classList.remove("on")); chip.classList.add("on"); }
+    if (box.classList.contains("seg") || (box.classList.contains("one") && !chip.classList.contains("on"))) { box.querySelectorAll("button").forEach(b => b.classList.remove("on")); chip.classList.add("on"); }
     else chip.classList.toggle("on");
+    if (box.id === "ob-tracker") { ob.a.tracker = chip.classList.contains("on") ? chip.dataset.v : ""; $("ob-connect").innerHTML = connectBlock(); }
+    if (box.id === "ob-cycle") $("ob-cycle-more").hidden = !(chip.classList.contains("on") && chip.dataset.v === "yes");
     if (box.id === "e-sym") { const row = document.querySelector(`#e-sym-n [data-k="${chip.dataset.k}"]`); if (row) row.hidden = !chip.classList.contains("on"); }
-    if (box.id === "o-cycle") $("o-cycle-more").hidden = chip.dataset.v !== "yes";
     if (box.id === "s-cycle") $("s-cycle-more").hidden = chip.dataset.v !== "yes";
     return;
   }
@@ -516,14 +613,33 @@ $("app").addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act, s = S(), v = id => ($(id) || {}).value;
   if (act === "cal-prev" || act === "cal-next") { ui.calMonth = new Date(ui.calMonth.getFullYear(), ui.calMonth.getMonth() + (act === "cal-next" ? 1 : -1), 1); render(); }
-  else if (act === "setup-done") {
-    const conditions = Array.from(document.querySelectorAll("#o-cond button.on")).map(x => x.dataset.v);
-    const pem = segVal("o-pem") || "unsure", track = segVal("o-cycle") === "yes", start = v("o-start");
-    const t = todayISO(), template = C.pickTemplate(conditions, pem);
-    store.saveSettings(Object.assign({}, s, { onboarded: true, conditions, pem, cycle: { track, starts: isDate(start) ? [start] : [], length: 28 }, plan: C.newPlan(template, t) }));
-    toast(`Your plan: ${TEMPLATES[template].label}`);
-    ui.view = "today"; render();
+  else if (act === "ob-next" || act === "ob-back") {
+    obCollect();
+    const dir = act === "ob-next" ? 1 : -1;
+    ob.step = Math.max(0, Math.min(OB_STEPS.length - 1, ob.step + dir));
+    if (OB_STEPS[ob.step] === "cycle" && !C.asksCycle(ob.a)) ob.step += dir;  // no period questions after "male"
+    render(); window.scrollTo(0, 0);
+  }
+  else if (act === "ob-use-shift") { ob.a.onset = b.dataset.v; $("ob-onset").value = b.dataset.v; $("ob-onset-more").innerHTML = onsetExtras(); }
+  else if (act === "ob-health") {
+    try { await Health.requestAuthorization(); } catch (x) { toast("Apple Health isn't available"); return; }
+    ob.health = true;
+    const n = await readHealth(540, true); toast(n ? `Read ${n} ${n === 1 ? "day" : "days"} from Apple Health` : "Nothing found in Apple Health yet");
+    $("ob-connect").innerHTML = connectBlock();
+  }
+  else if (act === "ob-start") {
+    obCollect();
+    const t = todayISO(), next = C.settingsFromAnswers(ob.a, t);
+    next.reminders = s.reminders; if (ob.health || s.health) next.health = true;
+    store.saveSettings(next); ui.redo = false; ob.step = 0;
+    ui.view = "today"; render(); window.scrollTo(0, 0);
     const due = dueCheckin(); if (due) openCheckin(due);
+  }
+  else if (act === "redo-setup") {
+    if (!confirm("Run setup again? Your plan starts again from your answers. Your log stays.")) return;
+    Object.assign(ob.a, blankAnswers(), { conditions: s.conditions.slice(), age: C.ageNow(s, todayISO()) ?? "", sex: s.sex, tracker: s.tracker, onset: s.onset, symptoms: s.symptoms.slice(), symptomNote: s.context.symptoms, exercise: s.exercise.slice(),
+      pem: s.pem, goodDay: s.goodDay, outDays: s.outDays.slice(), cycle: s.cycle.track ? "yes" : "", lastPeriod: C.cycleStarts(s).slice(-1)[0] || "", other: s.context.other });
+    ob.step = 0; ui.redo = true; render(); window.scrollTo(0, 0);
   }
   else if (act === "go-checkin" || act === "go-today") {
     if (act === "go-today" && (ui.view === "morning" || ui.view === "evening")) { try { localStorage.setItem(NOT_NOW, checkinDay() + ":" + ui.view); } catch (x) {} }
@@ -566,7 +682,7 @@ $("app").addEventListener("click", async e => {
     WEEK.forEach(d => { P.week[d] = v("p-w-" + d); });
     P.session = Object.assign({}, P.session, { title: v("p-title") || P.session.title, minutes: num(v("p-min")) ?? P.session.minutes, addPerWeek: num(v("p-add")) ?? 0, maxMinutes: num(v("p-max")) ?? P.session.maxMinutes });
     P.steps = { open: num(v("p-steps-open")), session: num(v("p-steps-session")), rest: num(v("p-steps-rest")) };
-    P.bedtime = v("p-bed") || ""; P.note = (v("p-note") || "").trim();
+    P.bedtime = v("p-bed") || ""; P.note = (v("p-note") || "").trim(); P.hrCap = num(v("p-hr"));
     P.limits = Object.assign({}, P.limits, { sleepMin: num(v("p-sleep")) ?? P.limits.sleepMin, rhrAbove: num(v("p-l-rhr")) ?? P.limits.rhrAbove, hrvBelowPct: num(v("p-l-hrv")) ?? P.limits.hrvBelowPct,
       symptomAmber: num(v("p-l-sa")) ?? P.limits.symptomAmber, symptomRed: num(v("p-l-sr")) ?? P.limits.symptomRed });
     if ($("p-l-ra")) Object.assign(P.limits, { riseAmber: num(v("p-l-ra")) ?? P.limits.riseAmber, riseRed: num(v("p-l-rr")) ?? P.limits.riseRed });

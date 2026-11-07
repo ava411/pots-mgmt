@@ -10,6 +10,7 @@ A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine
 
 ## What it does
 
+- **Setup.** A few light screens, then a short questionnaire, one question per screen and each one skippable: age and sex at birth, your health tracker (its history comes in), when it started (the app points out where your resting heart rate rose, and shows your numbers before and since), your symptoms, exercise you could do at least once a week, your energy, the days you're out, your cycle (not asked after "male"), and anything else. Your answers set the plan: which days hold a session, what it is, how long it starts, which symptoms the evening asks about.
 - **Morning check-in.** It opens by itself until it's done. Sleep, resting heart rate and HRV come from Apple Health or a WHOOP file when you have them; otherwise you type them, or leave them out. You rate your symptoms 0 to 10, do the standing test if you have POTS, and tap what's planned today (chores, meetings, events, travel).
 - **Today.** The day's plan: a session, a light session, no session or rest; a step limit; bedtime; and a line of your own, such as a fluid target.
 - **Evening check-in.** It opens by itself from 10 pm. Tap the symptoms you had and score them, say whether you had a migraine or took rescue medication, whether you crashed, and whether you did the session.
@@ -23,11 +24,12 @@ The answers at setup pick a starting plan. Everything in it can be changed in Se
 | Conditions | Starting plan | What it does |
 | --- | --- | --- |
 | POTS | Build up slowly | Lying or seated cardio three times a week, a little longer each week |
-| Long COVID, or symptoms that get worse a day or two after doing too much | Pacing | Gentle movement within your limits, with no step-ups |
+| Long COVID or respiratory illness, or symptoms that get worse a day or two after doing too much | Pacing | Gentle movement within your limits, with no step-ups |
 | Post-concussion | Light daily activity | Easy cardio most days, below the level that brings symptoms on |
 | Migraine | Steady routine | Easy cardio three times a week; the log counts migraine days |
+| Other | Light daily activity | As for post-concussion |
 
-Limits come from your own data. After 7 mornings with readings, a resting heart rate 4 above your usual, or HRV 15 percent below it, turns the day into rest. So does a symptom score of 6 or more, or a standing rise of 40 or more. A score of 4 or 5, or a rise of 30 to 39, makes it a light day. Two such rest mornings in a row, or a crash, start a flare, which ends after two good mornings. Steps follow your own usual count. Every number can be changed.
+Limits come from your own data. After 7 mornings with readings, a resting heart rate 4 above your usual, or HRV 15 percent below it, turns the day into rest. So does a symptom score of 6 or more, or a standing rise of 40 or more. A score of 4 or 5, or a rise of 30 to 39, makes it a light day. Two such rest mornings in a row, or a crash, start a flare, which ends after two good mornings. Steps follow your own usual count. Sessions carry a heart-rate guide: 70 percent of 220 minus your age, or your resting heart rate plus 15 when pacing. Every number can be changed.
 
 ## Wearables
 

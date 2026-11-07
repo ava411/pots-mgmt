@@ -14,6 +14,7 @@ POTS Tracker: a public, open-source daily plan and log for POTS, long COVID, pos
 ## Interface principles (from the owner)
 
 - Plain words, one instruction per line, sentence case. No eyebrow labels, small helper text or clutter.
+- Setup is meant to be fun (this is a miserable disease): big playful type, the out-of-breath heart, short plain text, one question per screen, each skippable. Order: So you have POTS; flourishing life; conditions; when you're ready; about you (age, sex at birth); tracker; when it started; symptoms; exercise; energy; days out; cycle (skipped after male); anything else; the plan. Logic for turning answers into settings lives in `core.js` (`settingsFromAnswers`, `weekFor`, `sessionFor`, `findShift`, `beforeAfter`).
 - Today tells and asks nothing; the check-ins ask and tell nothing about the day. Settings holds settings.
 - Check-ins open by themselves: the morning one from 4 am until done, the evening one from 10 pm until 4 am (after midnight it counts for the day before). "Not now" keeps one closed for the rest of that day.
 - Evening symptoms are taps; a 0 to 10 box appears only for a tapped one.
