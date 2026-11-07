@@ -21,6 +21,7 @@ POTS Tracker: a public, open-source daily plan and log for POTS, long COVID, pos
 - Evening symptoms are taps; a 0 to 10 box appears only for a tapped one.
 - Day colours say what a day is for: the main session blue; floor sets, light sessions and other exercise violet; rest grey; busy plain. A day with no session and no plans is blank in the calendar; its name is "No session". Cycle markers use red alone: period, mid-cycle and luteal.
 - The first screen explains POTS in a quotation from the 2019 NIH expert consensus (Vernino and others, Autonomic Neuroscience 2021, PMC8455420), with its source underneath. Keep any explanation of a condition quoted from a published source, word for word, never written by us.
+- The privacy policy (`public/privacy.html`) is the ONC 2018 Model Privacy Notice, filled in. Keep its wording; change only the options and the blanks, and list any of our own words in the README's Privacy section. Update it, and its date, whenever the app's handling of data changes.
 - Safety wording (a medical note, when to get care) is deferred: the owner will define it. Apple asks health apps that give advice to remind people to check with a doctor (App Store guideline 1.4.1), so it is needed before submission.
 
 ## Code

@@ -7,6 +7,7 @@ A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine
 - Everything you enter stays on your device. There are no accounts, and no server stores anything.
 - The app loads only its own files. Its content security policy stops it from sending data to any other site, and it uses no analytics or outside fonts.
 - Backups are files you save and keep yourself.
+- The [privacy policy](public/privacy.html) follows the U.S. government's [2018 Model Privacy Notice](https://www.healthit.gov/sites/default/files/2018modelprivacynotice.pdf) for health apps, from the Office of the National Coordinator for Health Information Technology (ONC). Its headings, statements and definitions are the notice's own words, with the options that are true for this app chosen. Our own words are only these: the title and date; the line naming the source; the app's primary use; the line on the web host; how to turn on encryption; what the app reads from Apple Health and how to change it; how backups leave the app; how to see, edit and delete your data; "There are no accounts" in place of account deactivation; how changes are posted; the breach line; and the contact details.
 
 ## What it does
 
