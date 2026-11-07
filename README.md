@@ -10,11 +10,11 @@ A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine
 
 ## What it does
 
-- **Setup.** A few light screens, then a short questionnaire, one question per screen and each one skippable: age and sex at birth, your health tracker (its history comes in), when it started (the app points out where your resting heart rate rose, and shows your numbers before and since), your symptoms, exercise you could do at least once a week, your energy, the days you're out, your cycle (not asked after "male"), and anything else. Your answers set the plan: which days hold a session, what it is, how long it starts, which symptoms the evening asks about.
-- **Morning check-in.** It opens by itself until it's done. Sleep, resting heart rate and HRV come from Apple Health or a WHOOP file when you have them; otherwise you type them, or leave them out. You rate your symptoms 0 to 10, do the standing test if you have POTS, and tap what's planned today (chores, meetings, events, travel).
-- **Today.** The day's plan: a session, a light session, no session or rest; a step limit; bedtime; and a line of your own, such as a fluid target.
-- **Evening check-in.** It opens by itself from 10 pm. Tap the symptoms you had and score them, say whether you had a migraine or took rescue medication, whether you crashed, and whether you did the session.
-- **Calendar.** What each day is for, the exercise you did, and your cycle if you track it. The box underneath previews tomorrow.
+- **Setup.** A few light screens, then a short questionnaire, one question per screen and each one skippable: age and sex at birth, your health tracker (its history comes in), when it started (the app points out where your resting heart rate rose, and shows your numbers before and since), your symptoms, exercise you could do at least once a week, your energy, the days you're out, when you want to be in bed, your cycle (not asked after "male"), and anything else. Your answers set the plan: which days hold a session, what it is, how long it starts, which symptoms the evening asks about.
+- **Morning check-in.** It opens by itself until it's done. Sleep, resting heart rate and HRV come from Apple Health or a WHOOP file when you have them; otherwise you type them, or leave them out. You rate how you feel 0 to 10 (with POTS, your legs, lying down), do the standing test if you have POTS, and tap what's planned today (chores, meetings, events, travel).
+- **Today.** The day's plan: a session (with POTS, cardio and a floor set), a light session, no session or rest; a step limit; bedtime; and a line of your own, such as a fluid target. "How to do the session" opens the steps. After a flare, a note says when your limits come back.
+- **Evening check-in.** It opens by itself from 10 pm. Tap the symptoms you had and score them, say whether you had a migraine or took rescue medication, whether you crashed, and which session you did.
+- **Calendar.** What each day is for, the exercise you did, and your cycle if you track it (period and luteal phase). The box underneath previews tomorrow.
 - **Review.** Four weeks of resting heart rate, HRV, symptoms, standing rise and steps, against your limits, and this week in plain lines.
 
 ## Starting plans
@@ -23,13 +23,13 @@ The answers at setup pick a starting plan. Everything in it can be changed in Se
 
 | Conditions | Starting plan | What it does |
 | --- | --- | --- |
-| POTS | Build up slowly | Lying or seated cardio three times a week, a little longer each week |
+| POTS | Build up slowly | Lying or seated cardio three times a week and a floor set twice, a little longer each week; a light day is the floor set |
 | Long COVID or respiratory illness, or symptoms that get worse a day or two after doing too much | Pacing | Gentle movement within your limits, with no step-ups |
 | Post-concussion | Light daily activity | Easy cardio most days, below the level that brings symptoms on |
 | Migraine | Steady routine | Easy cardio three times a week; the log counts migraine days |
 | Other | Light daily activity | As for post-concussion |
 
-Limits come from your own data. After 7 mornings with readings, a resting heart rate 4 above your usual, or HRV 15 percent below it, turns the day into rest. So does a symptom score of 6 or more, or a standing rise of 40 or more. A score of 4 or 5, or a rise of 30 to 39, makes it a light day. Two such rest mornings in a row, or a crash, start a flare, which ends after two good mornings. Steps follow your own usual count. Sessions carry a heart-rate guide: 70 percent of 220 minus your age, or your resting heart rate plus 15 when pacing. Every number can be changed.
+Limits come from your own data. After 7 mornings with readings, a resting heart rate 4 above your usual, or HRV 15 percent below it, turns the day into rest. So does a morning score of 6 or more, or a standing rise of 40 or more. A score of 4 or 5, or a rise of 30 to 39, makes it a light day. Plans make it a busy day, though a meeting or event alone leaves room for the floor set. Two such rest mornings in a row, or a crash, start a flare, which ends after two good mornings. After it, steps stay 1,000 lower for 3 days and sessions go back a week for 7. With your cycle tracked, sessions get longer only from day 4 to mid-cycle, and with POTS the 9 days before a period run at 80 percent. Steps follow your own usual count. Sessions carry a heart-rate guide: 70 percent of 220 minus your age, or your resting heart rate plus 15 when pacing. Every number can be changed.
 
 ## Wearables
 

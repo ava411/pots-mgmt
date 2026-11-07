@@ -23,7 +23,7 @@ function normalize(s) {
   if (out.plan) {
     const fresh = C.newPlan(out.plan.template, out.plan.start || todayISO());
     out.plan = Object.assign(fresh, out.plan, { week: Object.assign(fresh.week, out.plan.week), session: Object.assign(fresh.session, out.plan.session),
-      steps: Object.assign(fresh.steps, out.plan.steps), limits: Object.assign(fresh.limits, out.plan.limits) });
+      floor: Object.assign(fresh.floor, out.plan.floor), steps: Object.assign(fresh.steps, out.plan.steps), limits: Object.assign(fresh.limits, out.plan.limits) });
   }
   return out;
 }
@@ -76,9 +76,9 @@ const seg = (cur, v, label) => `<button data-v="${esc(v)}" class="${cur === v ? 
 const segVal = id => { const b = document.querySelector(`#${id} button.on`); return b ? b.dataset.v : null; };
 
 /* ============================ Setup: a few screens, then a questionnaire ============================ */
-const OB_STEPS = ["hello", "why", "conditions", "intro", "about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "cycle", "other", "plan"];
-const QUESTIONS = ["about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "cycle", "other"];
-const blankAnswers = () => ({ conditions: [], age: "", sex: "", tracker: "", onset: "", symptoms: [], symptomNote: "", exercise: [], pem: "", goodDay: "", outDays: [], cycle: "", lastPeriod: "", other: "" });
+const OB_STEPS = ["hello", "why", "conditions", "intro", "about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "bed", "cycle", "other", "plan"];
+const QUESTIONS = ["about", "tracker", "onset", "symptoms", "exercise", "energy", "week", "bed", "cycle", "other"];
+const blankAnswers = () => ({ conditions: [], age: "", sex: "", tracker: "", onset: "", symptoms: [], symptomNote: "", exercise: [], pem: "", goodDay: "", outDays: [], bedtime: "", cycle: "", lastPeriod: "", other: "" });
 const ob = { step: 0, a: blankAnswers(), health: false };
 const HEART = `<svg class="ob-heart" viewBox="0 0 130 100" aria-hidden="true">
   <g class="speed"><path d="M6 40h20"/><path d="M0 54h24"/><path d="M8 68h16"/></g>
@@ -139,18 +139,22 @@ function obScreen(name) {
       <label class="f">Do your symptoms get worse a day or two after doing too much?</label><div class="seg" id="ob-pem">${seg(a.pem, "yes", "Yes")}${seg(a.pem, "no", "No")}${seg(a.pem, "unsure", "Not sure")}</div>
       <label class="f">On a good day, how long can you stay active before symptoms build?</label>${obChips("ob-good", C.GOOD_DAY.map(g => [g[0], g[1]]), [a.goodDay], true)}`;
     case "week": return `<h1 class="ob-h2">Which days are you out for work, study or other commitments?</h1><p class="ob-p">Sessions go on the other days.</p>${obChips("ob-out", WEEK.map(d => [d, capFirst(d)]), a.outDays)}`;
+    case "bed": return `<h1 class="ob-h2">What time do you want to be in bed?</h1><p class="ob-p">It goes on your plan each day.</p><input type="time" id="ob-bed" value="${esc(a.bedtime)}">`;
     case "cycle": return `<h1 class="ob-h2">Do your symptoms change with your cycle?</h1>${obChips("ob-cycle", [["no", "No"], ["yes", "Yes"], ["na", "Doesn't apply"]], [a.cycle], true)}
       <div id="ob-cycle-more"${a.cycle === "yes" ? "" : " hidden"}><label class="f" for="ob-period">When did your last period start?</label><input type="date" id="ob-period" value="${esc(a.lastPeriod)}" max="${t}">${Health ? `<p class="small muted">Periods you log in Apple Health fill in by themselves.</p>` : ""}</div>`;
     case "other": return `<h1 class="ob-h2">Anything else we should know?</h1><p class="ob-p">Treatments, triggers, what a good day looks like. It stays on this phone.</p><textarea id="ob-other" rows="5">${esc(a.other)}</textarea>`;
     case "plan": {
       const s = C.settingsFromAnswers(a, t), P = s.plan, T = TEMPLATES[P.template], base = C.baselines(store.days, t), steps = C.stepLimits(P, base), ba = C.beforeAfter(store.days, s.onset);
-      const sessionDays = WEEK.filter(d => P.week[d] === "session").map(capFirst), lines = [];
+      const and = list => list.join(", ").replace(/, ([^,]*)$/, " and $1"), lines = [];
+      const sessionDays = WEEK.filter(d => ["session", "both"].includes(P.week[d])).map(capFirst), floorDays = WEEK.filter(d => ["floor", "both"].includes(P.week[d])).map(capFirst);
       lines.push(`<b>${esc(T.label)}.</b> ${esc(T.about)}`);
-      if (sessionDays.length) lines.push(`${esc(P.session.title)}, ${P.session.minutes} min, on ${esc(sessionDays.join(", ").replace(/, ([^,]*)$/, " and $1"))}.` + (num(P.session.addPerWeek) ? ` A little longer each week, up to ${P.session.maxMinutes}.` : ""));
+      if (sessionDays.length) lines.push(`${esc(P.session.title)}, ${P.session.minutes} min, on ${esc(and(sessionDays))}.` + (num(P.session.addPerWeek) ? ` A little longer each week, up to ${P.session.maxMinutes}.` : ""));
+      if (floorDays.length) lines.push(`${esc(P.floor.title)}, ${P.floor.minutes} min, on ${esc(and(floorDays))}.`);
       if (steps.open != null) lines.push(`Up to about ${n0(steps.open)} steps on days without a session, from your own usual.`);
       if (ba && ba.rhr) lines.push(`Since ${esc(fmtShort(parseISO(s.onset)))}: resting heart rate ${Math.round(ba.rhr.after)}, against ${Math.round(ba.rhr.before)} before` + (ba.hrv ? `; HRV ${Math.round(ba.hrv.after)}, against ${Math.round(ba.hrv.before)}.` : "."));
       if (s.symptoms.length) lines.push(`Your evening check-in asks about ${esc(s.symptoms.map(k => SYMPTOMS[k].toLowerCase()).join(", ").replace(/, ([^,]*)$/, " and $1"))}.`);
-      if (s.cycle.track) lines.push("Sessions hold steady in the week before a period.");
+      if (C.fmtBed(P.bedtime)) lines.push(`In bed by ${esc(C.fmtBed(P.bedtime))}.`);
+      if (s.cycle.track) lines.push(num(P.session.addPerWeek) ? "Sessions get longer only from day 4 to mid-cycle." + (T.luteal ? " In the 9 days before a period, sessions and steps run at 80 percent." : "") : (T.luteal ? "In the 9 days before a period, sessions and steps run at 80 percent." : "Your cycle shows in the calendar."));
       return `<div class="ob-art small">${HEART}</div><h1 class="ob-h2">Here's your plan.</h1><ul class="clean lines ob-plan">${lines.map(l => `<li>${l}</li>`).join("")}</ul><p class="ob-p">You can change any of it in Settings.</p>`;
     }
   }
@@ -166,6 +170,7 @@ function obCollect() {
   if (name === "exercise") a.exercise = on("ob-ex");
   if (name === "energy") { a.pem = segVal("ob-pem") || ""; a.goodDay = on("ob-good")[0] || ""; }
   if (name === "week") a.outDays = on("ob-out");
+  if (name === "bed") a.bedtime = /^\d{1,2}:\d{2}$/.test(v("ob-bed")) ? v("ob-bed") : "";
   if (name === "cycle") { a.cycle = on("ob-cycle")[0] || ""; a.lastPeriod = isDate(v("ob-period")) ? v("ob-period") : ""; }
   if (name === "other") a.other = v("ob-other");
 }
@@ -183,12 +188,20 @@ function linesHTML(p, withNotes) {
   return `<ul class="clean lines">${p.lines.concat(withNotes ? p.notes : []).map(l => `<li>${esc(l)}</li>`).join("")}</ul>`;
 }
 function outBlock(p) {
-  const why = p.why.length && (p.type === "rest" || p.type === "light") ? `<p class="why">Why: ${esc(p.why.join("; "))}.</p>` : "";
-  return `<div class="daytype tone-${p.tone}">${esc(p.label)}</div>${why}${linesHTML(p, true)}`;
+  const why = p.why.length && (p.type === "rest" || p.type === "light") ? `<p class="why">Why: ${esc(p.why.join(", "))}.</p>` : "";
+  const how = p.training.length ? `<details class="how"><summary>How to do the session</summary>${p.training.map(x => `<p><b>${esc(x.title)}</b></p><ul class="clean small">${x.how.map(l => `<li>${esc(l)}</li>`).join("")}</ul>`).join("")}</details>` : "";
+  return `<div class="daytype tone-${p.tone}">${esc(p.label)}</div>${why}${linesHTML(p, true)}${how}`;
 }
 function flareBanner(p) {
   if (p.type !== "flare") return "";
-  return `<div class="banner rest"><b>Flare, day ${p.flare.length}.</b> It ends after two good mornings in a row.</div>`;
+  return `<div class="banner red"><b>Flare, day ${p.flare.length}.</b> It ends after two mornings in a row back at your normal.</div>`;
+}
+function resumeBanner(p) {
+  if (!p.resume.steps && !p.resume.volume) return "";
+  const end = parseISO(p.flare.endedOn), parts = [];
+  if (p.resume.steps && p.ceiling != null) parts.push(`steps stay 1,000 lower until ${fmtShort(addDays(end, 2))}`);
+  if (p.resume.volume && num(S().plan.session.addPerWeek)) parts.push(`sessions are a week back until ${fmtShort(addDays(end, 6))}`);
+  return parts.length ? `<div class="banner info">The flare is over. ${esc(capFirst(parts.join(", and ")))}.</div>` : "";
 }
 function baselineLine(p) {
   const n = p.base.rhr.n;
@@ -197,17 +210,17 @@ function baselineLine(p) {
 function viewToday() {
   const t = todayISO(), entry = store.days[t] || {}, p = plan(t);
   const head = entry.morning ? "Today" : "Today, as planned";
-  return flareBanner(p) + `<div class="card ${entry.morning || p.type === "flare" ? "tint-" + p.tone : ""}"><h2>${head}</h2>${outBlock(p)}${baselineLine(p)}</div>`
+  return flareBanner(p) + resumeBanner(p) + `<div class="card ${entry.morning || p.type === "flare" ? "tint-" + p.tone : ""}"><h2>${head}</h2>${outBlock(p)}${baselineLine(p)}</div>`
     + weekCard() + `<div class="actions"><button class="btn quiet" data-act="go-checkin">Edit today's check-in</button></div>`;
 }
 
 /* ============================ Calendar marks ============================ */
-function planWords(p) { return p.short ? [p.short] : []; }
-function wordTone(w, p) {
+function planWords(p) { return p.words; }
+// The main session is blue; floor sets, light sessions and other exercise violet; rest and flares grey; busy plain.
+function wordTone(w) {
   if (w === "Rest" || w === "Flare") return "rest";
   if (w === "Busy") return "free";
-  if (w === "Light") return "plum";
-  return w === (S().plan.session.short || "") || w === "Session" ? "blue" : "plum";
+  return w === (S().plan.session.short || "Session") ? "blue" : "plum";
 }
 // Today and later: the plan. Earlier: what the day held (sessions, workouts, a migraine), else the rest, flare or busy
 // day its morning called. A day with no session and no plans stays blank.
@@ -222,10 +235,10 @@ function dayMark(k, p) {
   // A migraine day is a dot in the corner, so it doesn't crowd out what the day held.
   const mig = k <= todayISO() && !!((store.days[k] || {}).evening || {}).migraine;
   words = words.slice(0, 2);
-  const tone = words.length ? wordTone(words[0], p) : "";
-  return { cls: tone && tone !== "free" ? "bg-" + tone : "", html: words.map(w => `<span class="w tone-${wordTone(w, p)}${w.length > 5 ? " long" : ""}">${esc(w)}</span>`).join("") + (mig ? `<span class="mig" title="Migraine"></span>` : "") };
+  const tone = words.length ? wordTone(words[0]) : "";
+  return { cls: tone && tone !== "free" ? "bg-" + tone : "", html: words.map(w => `<span class="w tone-${wordTone(w)}${w.length > 5 ? " long" : ""}">${esc(w)}</span>`).join("") + (mig ? `<span class="mig" title="Migraine"></span>` : "") };
 }
-function phaseBar(c) { return !c ? "" : (c.period ? "period" : (c.late ? "late" : "")); }
+function phaseBar(c) { return !c ? "" : (c.period ? "period" : (c.phase === "follicular" ? "" : c.phase)); }
 function weekCard() {
   const t = todayISO(), mon = mondayOf(parseISO(t));
   let cells = "";
@@ -292,7 +305,7 @@ function morningForm() {
       <div><label class="f" for="m-hr3">At 3 minutes</label><input type="number" id="m-hr3" inputmode="numeric" value="${esc(m.hr3)}"></div>
     </div><p class="small" id="m-rise">${m.rise != null ? "Rise: " + esc(m.rise) : ""}</p>` : "";
   return `<div id="m-form"><div id="m-vitals">${vitalsBlock(t)}</div>
-    <label class="f" for="m-scale">Symptoms right now: <b id="m-scale-v" class="num">${scale}</b> out of 10</label>
+    <label class="f" for="m-scale">${esc((TEMPLATES[S().plan.template] || {}).morning || "Symptoms right now")}: <b id="m-scale-v" class="num">${scale}</b> out of 10</label>
     <input type="range" id="m-scale" min="0" max="10" value="${scale}">
     ${stand}
     <label class="f">What's on today? Tap once for each.</label>
@@ -321,7 +334,9 @@ function eveningForm() {
   const chips = keys.map(k => `<button data-k="${k}" class="${had(k) ? "on" : ""}">${esc(SYMPTOMS[k] || k)}</button>`).join("");
   const boxes = keys.map(k => `<div data-k="${k}"${had(k) ? "" : " hidden"}><label class="f" for="e-s-${k}">${esc(SYMPTOMS[k] || k)}, 0 to 10</label><input type="number" min="0" max="10" inputmode="numeric" id="e-s-${k}" value="${esc(sym[k] != null ? sym[k] : "")}"></div>`).join("");
   const yn = (id, label, v) => `<label class="f">${label}</label><div class="seg" id="${id}">${seg(v === true ? "yes" : "no", "no", "No")}${seg(v === true ? "yes" : "no", "yes", "Yes")}</div>`;
-  const hasSessions = Object.values(S().plan.week).includes("session");
+  const week = Object.values(S().plan.week), hasSessions = week.some(k => ["session", "both", "floor"].includes(k)), cur = e.session || "none";
+  const sessionSeg = C.usesFloor(S().plan) ? seg(cur, "none", "None") + seg(cur === "full" ? "cardio" : cur, "cardio", S().plan.session.short || "Session") + seg(cur, "floor", "Floor") + seg(cur, "both", "Both")
+    : seg(cur, "none", "None") + seg(cur, "light", "Light") + seg(cur === "cardio" ? "full" : cur, "full", "Full");
   const options = EVENTS.concat((e.events || []).filter(x => !EVENTS.includes(x)));
   return `<div id="e-form">
     <label class="f">Any of these today? Tap each one you had.</label>
@@ -329,7 +344,7 @@ function eveningForm() {
     <div class="form-grid" id="e-sym-n">${boxes}</div>
     ${C.hasCondition(S(), "migraine") ? yn("e-migraine", "Migraine today?", e.migraine) + yn("e-rescue", "Rescue medication today?", e.rescue) : ""}
     ${C.asksCrash(S()) ? yn("e-crash", "Did you crash today?", e.crash) : ""}
-    ${hasSessions ? `<label class="f">Session done</label><div class="seg" id="e-session">${seg(e.session || "none", "none", "None")}${seg(e.session || "none", "light", "Light")}${seg(e.session || "none", "full", "Full")}</div>` : ""}
+    ${hasSessions ? `<label class="f">Session done</label><div class="seg" id="e-session">${sessionSeg}</div>` : ""}
     ${wSteps == null ? `<label class="f" for="e-steps">Steps today, if you know them</label><input type="number" id="e-steps" inputmode="numeric" value="${esc(e.steps)}">` : ""}
     <label class="f">Anything unplanned?</label>
     <div class="chips" id="e-events">${options.map(o => `<button data-v="${esc(o)}" class="${(e.events || []).includes(o) ? "on" : ""}">${esc(o)}</button>`).join("")}</div>
@@ -366,9 +381,9 @@ function viewCalendar() {
     const d = addDays(gridStart, i), ds = iso(d), p = plan(ds, t), mk = dayMark(ds, p);
     cells += `<div class="cal-day ${d.getMonth() !== m.getMonth() ? "other" : ""} ${ds === t ? "today" : ""} ${ds === sel ? "sel" : ""} ${mk.cls}" data-date="${ds}"><span class="d num">${d.getDate()}</span>${mk.html}<span class="ph ${phaseBar(p.cycle)}"></span></div>`;
   }
-  const cyc = S().cycle.track ? `<span><i class="bar period"></i>Period</span><span><i class="bar late"></i>Week before</span>` : "";
+  const cyc = S().cycle.track ? `<span><i class="bar period"></i>Period</span><span><i class="bar luteal"></i>Luteal</span>` : "";
   const mig = C.hasCondition(S(), "migraine") ? `<span><i class="mig-key"></i>Migraine</span>` : "";
-  const legend = `<div class="legend"><span class="lg bg-blue tone-blue">${esc(S().plan.session.short)}</span><span class="lg bg-plum tone-plum">Light and other exercise</span><span class="lg bg-rest tone-rest">Rest</span>${mig}${cyc}</div>`;
+  const legend = `<div class="legend"><span class="lg bg-blue tone-blue">${esc(S().plan.session.short)}</span><span class="lg bg-plum tone-plum">${C.usesFloor(S().plan) ? "Floor set and other exercise" : "Light and other exercise"}</span><span class="lg bg-rest tone-rest">Rest</span>${mig}${cyc}</div>`;
   const label = m.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   return `<div class="card"><div class="cal-head"><button class="btn quiet" data-act="cal-prev">‹ Prev</button><h2>${esc(label)}</h2><button class="btn quiet" data-act="cal-next">Next ›</button></div>
     <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<div class="cal-dow">${x}</div>`).join("")}${cells}</div>${legend}</div>` + calendarBox(sel);
@@ -382,6 +397,8 @@ function lineChart(keys, values, opts = {}) {
   let lo = Math.min(...all, ...extra), hi = Math.max(...all, ...extra);
   if (hi - lo < 10) { lo -= 5; hi += 5; }
   lo = Math.floor(lo / 5) * 5 - 5; hi = Math.ceil(hi / 5) * 5 + 5;
+  if (opts.min != null) lo = Math.max(opts.min, lo);
+  if (opts.max != null) hi = Math.min(opts.max, hi);
   const x = i => L + (i / (keys.length - 1)) * (W - L - R), y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
   let svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">`;
   for (let g = lo; g <= hi; g += Math.max(5, Math.round((hi - lo) / 4 / 5) * 5)) svg += `<line class="axis" x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}"/><text x="${L - 4}" y="${y(g) + 4}" text-anchor="end">${g}</text>`;
@@ -410,8 +427,8 @@ function viewReview() {
   let out = `<div class="card"><h2>Last 4 weeks</h2><p class="small muted">Dashed lines are your limits.</p>`;
   out += `<h3>Resting heart rate</h3>` + lineChart(keys, r("rhr"), { limit: rows.map(x => x.p.base.rhr.value != null ? x.p.base.rhr.value + L.rhrAbove : null) });
   out += `<h3>HRV</h3>` + lineChart(keys, r("hrv"), { limit: rows.map(x => x.p.base.hrv.value != null ? Math.round(x.p.base.hrv.value * (100 - L.hrvBelowPct) / 100) : null) });
-  out += `<h3>Symptoms, mornings</h3>` + lineChart(keys, r("scale"), { refs: [L.symptomAmber, L.symptomRed] });
-  if (C.hasCondition(s, "pots")) out += `<h3>Standing rise</h3>` + lineChart(keys, r("rise"), { refs: [L.riseAmber, L.riseRed] });
+  out += `<h3>${esc((TEMPLATES[s.plan.template] || {}).morning || "Symptoms, mornings")}</h3>` + lineChart(keys, r("scale"), { refs: [L.symptomAmber, L.symptomRed], min: 0, max: 10 });
+  if (C.hasCondition(s, "pots")) out += `<h3>Standing rise</h3>` + lineChart(keys, r("rise"), { refs: [L.riseAmber, L.riseRed], min: 0 });
   out += `<h3>Steps</h3>` + barChart(keys, rows.map(x => C.stepsOf(x.e)), rows.map(x => x.p.ceiling)) + `</div>`;
   // This week, in plain lines naming the days.
   const mon = mondayOf(T0), sessions = [], over = [], reds = [];
@@ -437,10 +454,22 @@ function viewReview() {
   out += `<div class="card"><h2>This week</h2><p class="sub">Monday to today.</p><ul class="clean lines">${lines.map(l => `<li>${esc(l)}</li>`).join("")}</ul></div>`;
   const logged = rows.slice().reverse().filter(x => x.e.morning || x.e.evening || x.e.wearable);
   if (logged.length) {
-    out += `<div class="card"><h2>Log</h2><div class="wrap-x"><table class="t log"><tr><th>Date</th><th>Day</th><th>Sleep</th><th>RHR</th><th>HRV</th><th>Symptoms</th>${C.hasCondition(s, "pots") ? "<th>Rise</th>" : ""}<th>Steps</th><th>Exercise</th></tr>`;
+    // Columns as the data allows: cycle day when a cycle is tracked; recovery and strain when WHOOP gave them.
+    const any = f => logged.some(x => num(((x.e.wearable || {})[f])) != null), pots = C.hasCondition(s, "pots"), cyc = !!s.cycle.track;
+    const cols = [["Date", x => esc(fmtShort(parseISO(x.k)))],
+      cyc && ["Cycle day", x => x.p.cycle ? `${x.p.cycle.day}, ${x.p.cycle.phase}` : ""],
+      ["Day", x => x.p.checkedIn && x.p.short ? `<span class="pill ${x.p.tone}">${esc(x.p.short)}</span>` : ""],
+      ["Sleep", x => esc(x.r.sleep)], ["RHR", x => esc(x.r.rhr)], ["HRV", x => esc(x.r.hrv)],
+      any("recovery") && ["Recovery", x => x.r.recovery != null ? esc(x.r.recovery) + "%" : ""],
+      [capFirst(C.scaleWord(s)), x => esc(x.r.scale)],
+      pots && ["Rise", x => esc(x.r.rise)],
+      ["Steps", x => x.st != null ? n0(x.st) : "", x => x.st != null && x.p.ceiling != null && x.st > x.p.ceiling],
+      ["Session", x => esc(C.sessionsDone(x.e, s.plan).join(", "))],
+      any("strain") && ["Strain", x => esc((x.e.wearable || {}).strain)]].filter(Boolean);
+    out += `<div class="card"><h2>Log</h2><div class="wrap-x"><table class="t log"><tr>${cols.map(c => `<th>${c[0]}</th>`).join("")}</tr>`;
     logged.forEach(x => {
-      const rd = C.readingsOf(x.e), st = C.stepsOf(x.e), overDay = st != null && x.p.ceiling != null && st > x.p.ceiling;
-      out += `<tr class="num"><td>${esc(fmtShort(parseISO(x.k)))}</td><td>${x.p.checkedIn && x.p.short ? `<span class="pill ${x.p.tone}">${esc(x.p.short)}</span>` : ""}</td><td>${esc(rd.sleep)}</td><td>${esc(rd.rhr)}</td><td>${esc(rd.hrv)}</td><td>${esc(rd.scale)}</td>${C.hasCondition(s, "pots") ? `<td>${esc(rd.rise)}</td>` : ""}<td${overDay ? ' class="over"' : ""}>${st != null ? n0(st) : ""}</td><td>${esc(C.sessionsDone(x.e, s.plan).join(", "))}</td></tr>`;
+      x.r = C.readingsOf(x.e); x.st = C.stepsOf(x.e);
+      out += `<tr class="num">${cols.map(c => `<td${c[2] && c[2](x) ? ' class="over"' : ""}>${c[1](x)}</td>`).join("")}</tr>`;
     });
     out += `</table></div></div>`;
   }
@@ -450,44 +479,49 @@ function viewReview() {
 /* ============================ Settings ============================ */
 function viewSettings() {
   const s = S(), P = s.plan, T = TEMPLATES[P.template], base = C.baselines(store.days, todayISO()), auto = C.stepLimits({ steps: {} }, base);
-  const condChips = CONDITIONS.map(([k, l]) => `<button data-v="${k}" class="${s.conditions.includes(k) ? "on" : ""}">${l}</button>`).join("");
-  const kindSel = d => `<div><label class="f" for="p-w-${d}">${capFirst(d)}</label><select id="p-w-${d}">${[["session", "Session"], ["open", "No session"], ["rest", "Rest"]].map(([v, l]) => `<option value="${v}"${P.week[d] === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>`;
   const numIn = (id, label, v, ph = "", mode = "numeric") => `<div><label class="f" for="${id}">${label}</label><input type="number" id="${id}" inputmode="${mode}" value="${esc(v == null ? "" : v)}" placeholder="${esc(ph)}"></div>`;
-  const L = P.limits;
-  let out = `<div class="card"><h2>Your conditions</h2><div class="chips" id="s-cond">${condChips}</div>
-    <label class="f">Do your symptoms get worse a day or two after doing too much?</label>
-    <div class="seg" id="s-pem">${seg(s.pem, "yes", "Yes")}${seg(s.pem, "no", "No")}${seg(s.pem, "unsure", "Not sure")}</div>
-    <div style="margin-top:12px"><button class="btn primary block" data-act="save-conditions">Save</button></div></div>`;
-  out += `<div class="card"><h2>Your plan</h2>
-    <label class="f" for="p-template">Starting point</label><select id="p-template">${Object.entries(TEMPLATES).map(([k, t]) => `<option value="${k}"${P.template === k ? " selected" : ""}>${esc(t.label)}</option>`).join("")}</select>
-    <p class="small muted" style="margin-top:6px">${esc(T.about)}</p>
-    <div class="form-grid seven">${WEEK.map(kindSel).join("")}</div>
-    <label class="f" for="p-title">Session</label><input type="text" id="p-title" value="${esc(P.session.title)}">
-    <div class="form-grid three">${numIn("p-min", "Minutes", P.session.minutes)}${numIn("p-add", "Add each week", P.session.addPerWeek)}${numIn("p-max", "Up to", P.session.maxMinutes)}</div>
-    <div class="form-grid three">${numIn("p-steps-open", "Steps, no session", P.steps.open, auto.open != null ? n0(auto.open) : "")}${numIn("p-steps-session", "Steps, session day", P.steps.session, auto.session != null ? n0(auto.session) : "")}${numIn("p-steps-rest", "Steps, rest day", P.steps.rest, auto.rest != null ? n0(auto.rest) : "")}</div>
-    <p class="small muted">${auto.open != null ? "Left blank, steps follow your own: about " + n0(auto.open) + " a day." : "Left blank, steps follow your own once there are 7 days of them."}</p>
-    <div class="form-grid"><div><label class="f" for="p-bed">In bed by</label><input type="time" id="p-bed" value="${esc(P.bedtime)}"></div>${numIn("p-sleep", "Shortest night before rest (hours)", L.sleepMin, "", "decimal")}</div>
-    ${numIn("p-hr", "Heart rate guide in sessions", P.hrCap, (() => { const c = C.hrCap(Object.assign({}, s, { plan: Object.assign({}, P, { hrCap: null }) }), base, todayISO()); return c != null ? String(c) : ""; })())}
-    <label class="f" for="p-note">A line to show every day</label><input type="text" id="p-note" value="${esc(P.note)}" placeholder="For example: 2.5 L of fluid">
-    <details style="margin-top:12px"><summary>Limits</summary>
-      <div class="form-grid">${numIn("p-l-rhr", "Resting heart rate above your usual by", L.rhrAbove)}${numIn("p-l-hrv", "HRV below your usual by (%)", L.hrvBelowPct)}${numIn("p-l-sa", "Symptoms for a light day, from", L.symptomAmber)}${numIn("p-l-sr", "Symptoms for a rest day, from", L.symptomRed)}${C.hasCondition(s, "pots") ? numIn("p-l-ra", "Standing rise for a light day, from", L.riseAmber) + numIn("p-l-rr", "Standing rise for a rest day, from", L.riseRed) : ""}</div>
-    </details>
-    <div style="margin-top:12px"><button class="btn primary block" data-act="save-plan">Save</button></div></div>`;
+  // Cycle, data, wearables and reminders first; then the plan, the conditions and what setup asked.
+  let out = "";
   if (C.asksCycle(s)) out += `<div class="card"><h2>Your cycle</h2><div class="seg" id="s-cycle">${seg(s.cycle.track ? "yes" : "no", "no", "Don't track")}${seg(s.cycle.track ? "yes" : "no", "yes", "Track")}</div>
     <div id="s-cycle-more"${s.cycle.track ? "" : " hidden"}><label class="f" for="s-starts">Period start dates, oldest first</label><input type="text" id="s-starts" value="${esc(C.cycleStarts(s).join(", "))}" placeholder="YYYY-MM-DD">
     ${numIn("s-len", "Usual cycle length (days)", s.cycle.length)}</div>
     <div style="margin-top:12px"><button class="btn primary block" data-act="save-cycle">Save</button></div></div>`;
+  out += `<div class="card"><h2>Data</h2><p>Everything stays on this phone. Save a backup now and then, and keep it somewhere safe.</p>
+    <div class="actions"><button class="btn block" data-act="backup">Save a backup</button><label class="btn block" for="s-restore">Restore a backup</label><input type="file" id="s-restore" accept=".json,application/json" hidden><button class="btn block" data-act="csv">Download a spreadsheet</button><button class="btn quiet block danger" data-act="wipe">Delete everything</button></div></div>`;
   const health = Health ? `<p>Sleep, heart rate, HRV, steps, workouts and periods from Apple Health. Apple Watch and WHOOP both write there.</p><button class="btn primary block" data-act="health-connect">${s.health ? "Read Apple Health now" : "Connect Apple Health"}</button>` : "";
   out += `<div class="card"><h2>Wearables</h2>${health}
     <p${Health ? ' style="margin-top:12px"' : ""}>WHOOP recovery scores come from WHOOP's data export: request it in the WHOOP app, unzip the file it sends, and choose physiological_cycles.csv (and workouts.csv if you like).</p>
     <label class="btn block" for="s-whoop">Import WHOOP files</label><input type="file" id="s-whoop" accept=".csv,text/csv" multiple hidden></div>`;
   out += `<div class="card"><h2>Reminders</h2><div class="form-grid"><div><label class="f" for="s-rm">Morning</label><input type="time" id="s-rm" value="${esc(s.reminders.morning)}"></div><div><label class="f" for="s-re">Evening</label><input type="time" id="s-re" value="${esc(s.reminders.evening)}"></div></div>
     <div style="margin-top:12px">${Notes ? `<button class="btn primary block" data-act="reminders-on">${s.remindersOn ? "Update reminders" : "Turn on reminders"}</button>${s.remindersOn ? `<button class="btn quiet block" data-act="reminders-off">Turn off</button>` : ""}` : `<button class="btn primary block" data-act="reminders-ics">Add to my calendar</button>`}</div></div>`;
+  const main = P.session.short || "Session", floorOn = C.usesFloor(P) || C.usesFloor(T);
+  const kinds = floorOn ? [["session", main], ["both", main + " and floor"], ["floor", "Floor set"], ["open", "No session"], ["rest", "Rest"]] : [["session", "Session"], ["open", "No session"], ["rest", "Rest"]];
+  const kindSel = d => `<div><label class="f" for="p-w-${d}">${capFirst(d)}</label><select id="p-w-${d}">${kinds.map(([v, l]) => `<option value="${v}"${P.week[d] === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>`;
+  const L = P.limits;
+  out += `<div class="card"><h2>Your plan</h2>
+    <label class="f" for="p-template">Starting point</label><select id="p-template">${Object.entries(TEMPLATES).map(([k, t]) => `<option value="${k}"${P.template === k ? " selected" : ""}>${esc(t.label)}</option>`).join("")}</select>
+    <p class="small muted" style="margin-top:6px">${esc(T.about)}</p>
+    <div class="form-grid seven">${WEEK.map(kindSel).join("")}</div>
+    <label class="f" for="p-title">Session</label><input type="text" id="p-title" value="${esc(P.session.title)}">
+    <div class="form-grid three">${numIn("p-min", "Minutes", P.session.minutes)}${numIn("p-add", "Add each week", P.session.addPerWeek)}${numIn("p-max", "Up to", P.session.maxMinutes)}</div>
+    ${floorOn ? `<label class="f" for="p-floor">Floor set</label><input type="text" id="p-floor" value="${esc(P.floor.title)}"><div class="form-grid three">${numIn("p-floor-min", "Minutes", P.floor.minutes)}</div>` : ""}
+    <div class="form-grid three">${numIn("p-steps-open", "Steps, no session", P.steps.open, auto.open != null ? n0(auto.open) : "")}${numIn("p-steps-session", "Steps, session day", P.steps.session, auto.session != null ? n0(auto.session) : "")}${numIn("p-steps-rest", "Steps, rest day", P.steps.rest, auto.rest != null ? n0(auto.rest) : "")}</div>
+    <p class="small muted">${auto.open != null ? "Left blank, steps follow your own: about " + n0(auto.open) + " a day." : "Left blank, steps follow your own once there are 7 days of them."}</p>
+    <div class="form-grid"><div><label class="f" for="p-bed">In bed by</label><input type="time" id="p-bed" value="${esc(P.bedtime)}"></div>${numIn("p-sleep", "Shortest night before rest (hours)", L.sleepMin, "", "decimal")}</div>
+    ${numIn("p-hr", "Heart rate guide in sessions", P.hrCap, (() => { const c = C.hrCap(Object.assign({}, s, { plan: Object.assign({}, P, { hrCap: null }) }), base, todayISO()); return c != null ? String(c) : ""; })())}
+    <label class="f" for="p-note">A line to show every day</label><input type="text" id="p-note" value="${esc(P.note)}" placeholder="For example: 2.5 L of fluid">
+    <details style="margin-top:12px"><summary>Limits</summary>
+      <div class="form-grid">${numIn("p-l-rhr", "Resting heart rate above your usual by", L.rhrAbove)}${numIn("p-l-hrv", "HRV below your usual by (%)", L.hrvBelowPct)}${numIn("p-l-sa", "Morning score for a light day, from", L.symptomAmber)}${numIn("p-l-sr", "Morning score for a rest day, from", L.symptomRed)}${C.hasCondition(s, "pots") ? numIn("p-l-ra", "Standing rise for a light day, from", L.riseAmber) + numIn("p-l-rr", "Standing rise for a rest day, from", L.riseRed) : ""}</div>
+    </details>
+    <div style="margin-top:12px"><button class="btn primary block" data-act="save-plan">Save</button></div></div>`;
+  const condChips = CONDITIONS.map(([k, l]) => `<button data-v="${k}" class="${s.conditions.includes(k) ? "on" : ""}">${l}</button>`).join("");
+  out += `<div class="card"><h2>Your conditions</h2><div class="chips" id="s-cond">${condChips}</div>
+    <label class="f">Do your symptoms get worse a day or two after doing too much?</label>
+    <div class="seg" id="s-pem">${seg(s.pem, "yes", "Yes")}${seg(s.pem, "no", "No")}${seg(s.pem, "unsure", "Not sure")}</div>
+    <div style="margin-top:12px"><button class="btn primary block" data-act="save-conditions">Save</button></div></div>`;
   const age = C.ageNow(s, todayISO()), sexLabel = (C.SEXES.find(x => x[0] === s.sex) || [])[1];
   const about = [[age != null ? `Age ${age}` : "", sexLabel && s.sex !== "unsaid" ? sexLabel.toLowerCase() : ""].filter(Boolean).join(", "), s.onset ? `Started ${fmtLong(parseISO(s.onset))}, ${parseISO(s.onset).getFullYear()}.` : "", s.context.symptoms, s.context.other].filter(Boolean).map(capFirst);
   out += `<div class="card"><h2>About you</h2>${about.map(x => `<p class="small">${esc(x)}</p>`).join("")}<button class="btn block" data-act="redo-setup">Run setup again</button></div>`;
-  out += `<div class="card"><h2>Your data</h2><p>Everything stays on this phone. Save a backup now and then, and keep it somewhere safe.</p>
-    <div class="actions"><button class="btn block" data-act="backup">Save a backup</button><label class="btn block" for="s-restore">Restore a backup</label><input type="file" id="s-restore" accept=".json,application/json" hidden><button class="btn block" data-act="csv">Download a spreadsheet</button><button class="btn quiet block danger" data-act="wipe">Delete everything</button></div></div>`;
   return out;
 }
 
@@ -638,7 +672,7 @@ $("app").addEventListener("click", async e => {
   else if (act === "redo-setup") {
     if (!confirm("Run setup again? Your plan starts again from your answers. Your log stays.")) return;
     Object.assign(ob.a, blankAnswers(), { conditions: s.conditions.slice(), age: C.ageNow(s, todayISO()) ?? "", sex: s.sex, tracker: s.tracker, onset: s.onset, symptoms: s.symptoms.slice(), symptomNote: s.context.symptoms, exercise: s.exercise.slice(),
-      pem: s.pem, goodDay: s.goodDay, outDays: s.outDays.slice(), cycle: s.cycle.track ? "yes" : "", lastPeriod: C.cycleStarts(s).slice(-1)[0] || "", other: s.context.other });
+      pem: s.pem, goodDay: s.goodDay, outDays: s.outDays.slice(), bedtime: s.plan.bedtime || "", cycle: s.cycle.track ? "yes" : "", lastPeriod: C.cycleStarts(s).slice(-1)[0] || "", other: s.context.other });
     ob.step = 0; ui.redo = true; render(); window.scrollTo(0, 0);
   }
   else if (act === "go-checkin" || act === "go-today") {
@@ -681,6 +715,7 @@ $("app").addEventListener("click", async e => {
     }
     WEEK.forEach(d => { P.week[d] = v("p-w-" + d); });
     P.session = Object.assign({}, P.session, { title: v("p-title") || P.session.title, minutes: num(v("p-min")) ?? P.session.minutes, addPerWeek: num(v("p-add")) ?? 0, maxMinutes: num(v("p-max")) ?? P.session.maxMinutes });
+    if ($("p-floor")) P.floor = Object.assign({}, P.floor, { title: v("p-floor") || P.floor.title, minutes: num(v("p-floor-min")) ?? P.floor.minutes });
     P.steps = { open: num(v("p-steps-open")), session: num(v("p-steps-session")), rest: num(v("p-steps-rest")) };
     P.bedtime = v("p-bed") || ""; P.note = (v("p-note") || "").trim(); P.hrCap = num(v("p-hr"));
     P.limits = Object.assign({}, P.limits, { sleepMin: num(v("p-sleep")) ?? P.limits.sleepMin, rhrAbove: num(v("p-l-rhr")) ?? P.limits.rhrAbove, hrvBelowPct: num(v("p-l-hrv")) ?? P.limits.hrvBelowPct,

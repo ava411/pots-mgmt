@@ -21,7 +21,7 @@ test("the template follows the conditions; post-exertional malaise means pacing"
   assert.equal(C.pickTemplate([], "no"), "pacing", "nothing chosen: the gentlest plan");
   const p = C.newPlan("pots", TODAY);
   p.week.mon = "rest";
-  assert.equal(C.TEMPLATES.pots.week.mon, "session", "a plan is a copy; editing it leaves the template alone");
+  assert.equal(C.TEMPLATES.pots.week.mon, "both", "a plan is a copy; editing it leaves the template alone");
 });
 
 test("the evening asks about the chosen conditions' symptoms, plus any already logged", () => {
@@ -36,11 +36,13 @@ test("a check-in after midnight counts for the day before", () => {
   assert.equal(C.logDayISO(new Date(2026, 2, 21, 4, 0)), "2026-03-21");
 });
 
-test("cycle: off unless tracked; the week before a period; predicted cycles", () => {
+test("cycle: off unless tracked; follicular, mid and luteal; predicted cycles", () => {
   assert.equal(C.cycleOf(TODAY, settings(), TODAY), null);
   const s = settings({ cycle: { track: true, starts: ["2026-03-01"], length: 28 } });
-  assert.deepEqual(C.cycleOf("2026-03-02", s, TODAY), { day: 2, period: true, late: false, predicted: false });
-  assert.equal(C.cycleOf("2026-03-23", s, TODAY).late, true, "day 23 of 28");
+  assert.deepEqual(C.cycleOf("2026-03-02", s, TODAY), { day: 2, period: true, phase: "follicular", predicted: false });
+  assert.deepEqual(["2026-03-14", "2026-03-15", "2026-03-19", "2026-03-20"].map(d => C.cycleOf(d, s, TODAY).phase), ["follicular", "mid", "mid", "luteal"], "mid from day 15, luteal from day 20 of 28");
+  const long = settings({ cycle: { track: true, starts: ["2026-03-01"], length: 35 } });
+  assert.deepEqual([C.cycleOf("2026-03-26", long, TODAY).phase, C.cycleOf("2026-03-27", long, TODAY).phase], ["mid", "luteal"], "a longer cycle: the last 9 days are luteal");
   const next = C.cycleOf("2026-03-30", s, TODAY);
   assert.deepEqual([next.day, next.predicted], [2, true], "the next cycle is predicted from day 29");
   assert.equal(C.cycleOf("2026-02-20", s, TODAY), null, "nothing before the first logged start");
@@ -71,18 +73,27 @@ test("the plan for a day: as planned, rest, light, busy", () => {
   const s = settings();
   const days = history(TODAY);
   const planned = C.planFor(TODAY, s, days, TODAY);
-  assert.deepEqual([planned.type, planned.label, planned.tone, planned.ceiling], ["session", "Cardio day", "blue", 4500], "Friday is a session; three quarters of 6,000 steps");
+  assert.deepEqual([planned.type, planned.label, planned.tone, planned.ceiling, planned.words], ["session", "Cardio day", "blue", 4500, ["Cardio", "Floor"]], "Friday is cardio and a floor set; three quarters of 6,000 steps");
   assert.equal(planned.minutes, 24, "two weeks since 1 Mar: 20 + 2 + 2");
+  assert.deepEqual(planned.lines.slice(1, 3), ["Lying or seated cardio: bike, rower or pool, 24 min", "Floor set, lying down, 15 min"]);
+  assert.ok(planned.training.every(t => t.how.length), "each session says how to do it");
   const red = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { rhr: 66, scale: 1 } } }), TODAY);
-  assert.deepEqual([red.type, red.label, red.ceiling, red.why[0]], ["rest", "Rest day", 3000, "resting heart rate 66 is high for you"]);
+  assert.deepEqual([red.type, red.label, red.ceiling, red.why[0], red.lines[1]], ["rest", "Rest day", 3000, "resting heart rate 66 is high for you", "No training"]);
   const short = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { sleep: 5, scale: 1 } } }), TODAY);
   assert.equal(short.label, "Rest day, short night");
   const light = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { scale: 4 } } }), TODAY);
-  assert.deepEqual([light.type, light.lines[1]], ["light", "Lying or seated cardio: bike, rower or pool, 12 min, easy"]);
-  const busy = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { scale: 1, plans: { meetings: 1 } } } }), TODAY);
+  assert.deepEqual([light.type, light.why[0], light.lines[1], light.words, light.tone], ["light", "legs 4 out of 10", "Floor set, lying down, 15 min, easy", ["Floor"], "plum"], "POTS: a light day is the floor set");
+  const room = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { scale: 1, plans: { meetings: 1 } } } }), TODAY);
+  assert.deepEqual([room.type, room.label, room.ceiling, room.lines[1], room.notes[0]], ["light", "Light day", 6000, "Floor set, lying down, 15 min, easy", "Your plans take the place of today's cardio session."], "a meeting leaves room for the floor set");
+  const busy = C.planFor(TODAY, s, Object.assign({}, days, { [TODAY]: { morning: { scale: 1, plans: { travel: 1 } } } }), TODAY);
   assert.deepEqual([busy.type, busy.label, busy.short, busy.ceiling, busy.notes[0]], ["open", "Busy day", "Busy", 6000, "Your plans take the place of today's session."]);
+  const sunday = C.planFor("2026-03-15", s, Object.assign({}, days, { "2026-03-15": { morning: { scale: 1, plans: { events: 1 } } } }), TODAY);
+  assert.deepEqual([sunday.kind, sunday.type, sunday.label], ["rest", "open", "Busy day"], "plans on a planned rest day make it a busy day");
   const free = C.planFor("2026-03-19", s, days, TODAY);
   assert.deepEqual([free.type, free.label, free.short, free.tone], ["open", "No session", "", "free"], "Thursday has no session and no plans: no word in the calendar");
+  const mig = settings({ conditions: ["migraine"], plan: C.newPlan("migraine", "2026-03-01") });
+  const half = C.planFor(TODAY, mig, Object.assign({}, days, { [TODAY]: { morning: { scale: 4 } } }), TODAY);
+  assert.deepEqual([half.type, half.why[0], half.lines[1], half.words], ["light", "symptoms 4 out of 10", "Easy cardio, 12 min, easy", ["Light"]], "without floor sets, a light day is half the session");
 });
 
 test("travel makes the next day a rest day", () => {
@@ -99,11 +110,16 @@ test("pacing: no step-ups, and a heart-rate ceiling from your resting heart rate
   assert.ok(p.lines.includes("Keep your heart rate under 75"), p.lines);
 });
 
-test("progression holds in the week before a period", () => {
+test("cycle: progression moves on days 4 to 14 only; the luteal phase runs at 80 percent", () => {
   const s = settings({ cycle: { track: true, starts: ["2026-02-20"], length: 28 } });
-  s.plan.start = "2026-03-01";
-  // From 1 to 20 Mar: days 10 to 28 of the cycle; days 22 to 28 (13 to 19 Mar) hold. 19 days, 7 held: 12, one week.
-  assert.equal(C.sessionMinutes(s.plan, TODAY, s, TODAY), 22);
+  // From 1 to 19 Mar: cycle days 10 to 28. Only days 10 to 14 count: 5 days, not yet a week.
+  assert.equal(C.sessionMinutes(s.plan, TODAY, s, TODAY), 20);
+  const two = settings({ cycle: { track: true, starts: ["2026-02-02", "2026-03-02"], length: 28 } });
+  two.plan.start = "2026-02-02";
+  assert.equal(C.sessionMinutes(two.plan, TODAY, two, TODAY), 26, "11 days in each of two cycles: three weeks");
+  const lut = settings({ cycle: { track: true, starts: ["2026-03-01"], length: 28 } });
+  const p = C.planFor(TODAY, lut, history(TODAY), TODAY);
+  assert.deepEqual([p.cycle.phase, p.minutes, p.ceiling], ["luteal", 18, 3600], "day 20: 22 minutes and 4,500 steps, at 80 percent");
 });
 
 test("flares: two red mornings start one, two good mornings end it; a crash starts one the next day", () => {
@@ -115,7 +131,12 @@ test("flares: two red mornings start one, two good mornings end it; a crash star
   assert.equal(C.planFor("2026-03-18", s, days, TODAY).type, "flare");
   days["2026-03-18"] = { morning: { rhr: 60, hrv: 50, scale: 1 } };
   days["2026-03-19"] = { morning: { rhr: 60, hrv: 50, scale: 1 } };
-  assert.equal(C.flareOn(days, "2026-03-19", s, TODAY).active, false);
+  assert.deepEqual([C.flareOn(days, "2026-03-19", s, TODAY).active, C.flareOn(days, "2026-03-19", s, TODAY).endedOn], [false, "2026-03-19"]);
+  const after = C.planFor(TODAY, s, days, TODAY);
+  assert.deepEqual([after.resume, after.ceiling, after.minutes], [{ steps: true, volume: true }, 3500, 22], "after a flare: 1,000 fewer steps, and sessions a week back");
+  assert.match(after.lines[0], /lower for a few days after the flare$/);
+  assert.deepEqual(C.planFor("2026-03-25", s, days, TODAY).resume, { steps: false, volume: true }, "steps back after 3 days");
+  assert.deepEqual(C.planFor("2026-03-26", s, days, TODAY).resume, { steps: false, volume: false }, "sessions back after 7");
   const crash = history(TODAY);
   crash[C.shiftISO(TODAY, -1)].evening = { crash: true };
   assert.equal(C.flareOn(crash, TODAY, s, TODAY).active, true);
@@ -126,6 +147,8 @@ test("flares: two red mornings start one, two good mornings end it; a crash star
 test("training a day held: the evening's answer and workouts by sport", () => {
   const plan = C.newPlan("pots", TODAY);
   assert.deepEqual(C.sessionsDone({ evening: { session: "full" } }, plan), ["Cardio"]);
+  assert.deepEqual(C.sessionsDone({ evening: { session: "both" } }, plan), ["Cardio", "Floor"]);
+  assert.deepEqual(C.sessionsDone({ evening: { session: "floor" } }, plan), ["Floor"]);
   assert.deepEqual(C.sessionsDone({ wearable: { workouts: [{ name: "Swimming" }, { name: "Walking" }, { name: "Functional Fitness", strain: 6.1 }, { name: "Cycling", strain: 0 }] } }, plan), ["Pool", "Lift"]);
 });
 
@@ -164,7 +187,8 @@ test("setup: answers become the plan, the week, the session and the symptoms to 
   const s = C.settingsFromAnswers({ conditions: ["pots", "migraine"], age: 34, sex: "female", pem: "no", goodDay: "10to20", exercise: ["swim", "bike", "walk"],
     outDays: ["tue", "thu"], symptoms: ["headache", "lightheaded", "nope"], cycle: "yes", lastPeriod: "2026-03-02", onset: "2026-02-01", symptomNote: " dizzy in showers ", other: "" }, TODAY);
   assert.equal(s.plan.template, "pots");
-  assert.deepEqual(s.plan.week, { mon: "session", tue: "open", wed: "open", thu: "open", fri: "session", sat: "rest", sun: "session" }, "sessions on the days at home");
+  assert.deepEqual(s.plan.week, { mon: "both", tue: "open", wed: "open", thu: "open", fri: "both", sat: "rest", sun: "session" }, "sessions on the days at home; floor sets not on back-to-back days");
+  assert.equal(C.settingsFromAnswers({ conditions: ["pots"], bedtime: "22:30" }, TODAY).plan.bedtime, "22:30");
   assert.deepEqual([s.plan.session.title, s.plan.session.minutes, s.plan.session.short], ["Lying or seated cardio: swimming or a stationary bike", 15, "Cardio"]);
   assert.deepEqual([s.symptoms, s.age, s.ageAsOf, s.sex, s.onset, s.context.symptoms], [["headache", "lightheaded"], 34, TODAY, "female", "2026-02-01", "dizzy in showers"]);
   assert.deepEqual([s.cycle.track, s.cycle.starts], [true, ["2026-03-02"]]);

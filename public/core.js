@@ -17,34 +17,47 @@ export const CONDITION_SYMPTOMS = {
 };
 export const DOW = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 export const WEEK = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-// A week is made of three kinds of day: a session, no session, or rest.
+// A week is made of these kinds of day: a session, a session and a floor set, a floor set, no session, or rest.
+export const DAY_KINDS = [["session", "Session"], ["both", "Session and floor set"], ["floor", "Floor set"], ["open", "No session"], ["rest", "Rest"]];
+// The floor set: strength work lying down, as in the POTS programmes clinics use alongside cardio.
+export const FLOOR = { title: "Floor set, lying down", short: "Floor", day: "Floor day", minutes: 15,
+  how: ["2 sets of 12 to 15 slow reps: bridges, clamshells, dead bugs, side-lying leg raises.", "Rest with your legs up between sets.", "Stop if your heart rate passes the guide or you feel faint."] };
 export const TEMPLATES = {
   pots: {
     label: "Build up slowly",
-    about: "Lying or seated cardio three times a week, a little longer each week.",
-    week: { mon: "session", tue: "open", wed: "session", thu: "open", fri: "session", sat: "open", sun: "rest" },
-    session: { title: "Lying or seated cardio: bike, rower or pool", short: "Cardio", day: "Cardio day", minutes: 20, addPerWeek: 2, maxMinutes: 45 }
+    about: "Lying or seated cardio three times a week and a floor set twice, a little longer each week.",
+    week: { mon: "both", tue: "open", wed: "session", thu: "open", fri: "both", sat: "open", sun: "rest" },
+    session: { title: "Lying or seated cardio: bike, rower or pool", short: "Cardio", day: "Cardio day", minutes: 20, addPerWeek: 2, maxMinutes: 45,
+      how: ["Warm up: 3 minutes easy.", "Steady and easy: you can talk in full sentences.", "Cool down: 3 minutes easy.", "After: drink, then lie down for 15 minutes."] },
+    morning: "Legs, lying down", scaleWord: "legs", luteal: 0.8
   },
   pacing: {
     label: "Pacing",
     about: "Gentle movement within your limits, with no step-ups. The aim is fewer crashes.",
     week: { mon: "session", tue: "rest", wed: "open", thu: "session", fri: "rest", sat: "open", sun: "rest" },
-    session: { title: "Gentle movement, lying or seated", short: "Move", day: "Gentle movement", minutes: 10, addPerWeek: 0, maxMinutes: 10 },
+    session: { title: "Gentle movement, lying or seated", short: "Move", day: "Gentle movement", minutes: 10, addPerWeek: 0, maxMinutes: 10,
+      how: ["Lying or seated: gentle stretches or range-of-motion moves.", "Stop well before you feel tired.", "Rest lying down afterwards."] },
     hrAboveRest: 15
   },
   concussion: {
     label: "Light daily activity",
     about: "Easy cardio most days, below the level that brings symptoms on, a little longer each week.",
     week: { mon: "session", tue: "session", wed: "session", thu: "session", fri: "session", sat: "session", sun: "rest" },
-    session: { title: "Easy walk or bike. Stop if symptoms rise by 2 or more", short: "Cardio", day: "Cardio day", minutes: 15, addPerWeek: 2, maxMinutes: 40 }
+    session: { title: "Easy walk or bike. Stop if symptoms rise by 2 or more", short: "Cardio", day: "Cardio day", minutes: 15, addPerWeek: 2, maxMinutes: 40,
+      how: ["Easy pace: you can talk while you move.", "Stop if symptoms rise by 2 or more points out of 10.", "If symptoms stayed steady, add 2 minutes next time."] }
   },
   migraine: {
     label: "Steady routine",
     about: "Easy cardio three times a week and a steady routine. The log counts migraine days.",
     week: { mon: "session", tue: "open", wed: "session", thu: "open", fri: "session", sat: "open", sun: "open" },
-    session: { title: "Easy cardio", short: "Cardio", day: "Cardio day", minutes: 20, addPerWeek: 2, maxMinutes: 40 }
+    session: { title: "Easy cardio", short: "Cardio", day: "Cardio day", minutes: 20, addPerWeek: 2, maxMinutes: 40,
+      how: ["Warm up slowly for 5 minutes.", "Keep it easy.", "Drink water before and after."] }
   }
 };
+const isSessionKind = k => k === "session" || k === "both" || k === "floor";
+const isFloorKind = k => k === "both" || k === "floor";
+// Whether a plan's week holds floor sets. With them, a light day is the floor set, as in the POTS plan.
+export function usesFloor(P) { return Object.values((P && P.week) || {}).some(isFloorKind); }
 export const DEFAULT_LIMITS = { sleepMin: 6.5, rhrAbove: 4, hrvBelowPct: 15, symptomRed: 6, symptomAmber: 4, riseRed: 40, riseAmber: 30 };
 // Plans tapped in the morning, and roughly how many steps each takes.
 export const PLAN_STEPS = { chores: 500, meetings: 1500, events: 2500, travel: 3000 };
@@ -89,8 +102,8 @@ export function pickTemplate(conditions, pem) {
 }
 export function newPlan(template, start) {
   const T = TEMPLATES[template] || TEMPLATES.pacing;
-  return { template: TEMPLATES[template] ? template : "pacing", start, week: Object.assign({}, T.week), session: Object.assign({}, T.session),
-    steps: { open: null, session: null, rest: null }, limits: Object.assign({}, DEFAULT_LIMITS), bedtime: "", note: "" };
+  return { template: TEMPLATES[template] ? template : "pacing", start, week: Object.assign({}, T.week), session: Object.assign({}, T.session, { how: T.session.how.slice() }),
+    floor: Object.assign({}, FLOOR, { how: FLOOR.how.slice() }), steps: { open: null, session: null, rest: null }, limits: Object.assign({}, DEFAULT_LIMITS), bedtime: "", note: "" };
 }
 // The symptoms the evening asks about: those of the chosen conditions, in that order, plus any already logged.
 export function symptomKeys(conditions, logged = [], chosen = []) {
@@ -123,8 +136,8 @@ export function median(a) {
 }
 
 /* ============================ Cycle (optional) ============================ */
-// From the period starts the person logs. Day 1 is a start; the last 7 days before the next start are the week
-// before a period, when progression holds. Dates after today follow predicted cycles.
+// From the period starts the person logs. Day 1 is a start. Phases by days left in the cycle: luteal for the last 9
+// days (from day 20 of 28), mid for the 5 before, follicular until then. Dates after today follow predicted cycles.
 export function nextStart(s, today) {
   const starts = cycleStarts(s); if (!starts.length) return null;
   const due = shiftISO(starts[starts.length - 1], cycleLength(s));
@@ -142,7 +155,8 @@ export function cycleOf(dateStr, s, today) {
     const next = nextStart(s, today);
     if (dateStr >= next) { day = daysBetween(parseISO(next), parseISO(dateStr)) % len + 1; predicted = true; }
   }
-  return { day, period: day <= 3, late: day > len - 7, predicted };
+  const phase = day > len - 9 ? "luteal" : (day > len - 14 ? "mid" : "follicular");
+  return { day, period: day <= 3, phase, predicted };
 }
 
 /* ============================ Readings and baselines ============================ */
@@ -165,12 +179,12 @@ export function baselines(days, dateStr) {
 /* ============================ Morning check ============================ */
 // Red lines are set against your own baseline: resting heart rate 4 above it, HRV 15 percent below it. Symptoms and
 // the standing rise (POTS) have fixed lines. A short night means rest; a missing sleep reading does not.
-export function gate(r, base, L, standing) {
+export function gate(r, base, L, standing, word = "symptoms") {
   const red = [], amber = [];
   if (base.rhr.value != null && r.rhr != null && r.rhr >= base.rhr.value + L.rhrAbove) red.push(`resting heart rate ${r.rhr} is high for you`);
   if (base.hrv.value != null && r.hrv != null && r.hrv <= Math.round(base.hrv.value * (100 - L.hrvBelowPct) / 100)) red.push(`HRV ${r.hrv} is low for you`);
-  if (r.scale != null && r.scale >= L.symptomRed) red.push(`symptoms ${r.scale} out of 10`);
-  else if (r.scale != null && r.scale >= L.symptomAmber) amber.push(`symptoms ${r.scale} out of 10`);
+  if (r.scale != null && r.scale >= L.symptomRed) red.push(`${word} ${r.scale} out of 10`);
+  else if (r.scale != null && r.scale >= L.symptomAmber) amber.push(`${word} ${r.scale} out of 10`);
   if (standing && r.rise != null) {
     if (r.rise >= L.riseRed) red.push(`standing rise of ${r.rise}`);
     else if (r.rise >= L.riseAmber) amber.push(`standing rise of ${r.rise}`);
@@ -179,8 +193,9 @@ export function gate(r, base, L, standing) {
   return { red, amber, short, good: !red.length && !amber.length && !short };
 }
 export function limitsOf(s) { return Object.assign({}, DEFAULT_LIMITS, s && s.plan && s.plan.limits); }
+export function scaleWord(s) { const T = TEMPLATES[s && s.plan && s.plan.template]; return (T && T.scaleWord) || "symptoms"; }
 export function gateFor(days, dateStr, s) {
-  return gate(readingsOf(days[dateStr]), baselines(days, dateStr), limitsOf(s), hasCondition(s, "pots"));
+  return gate(readingsOf(days[dateStr]), baselines(days, dateStr), limitsOf(s), hasCondition(s, "pots"), scaleWord(s));
 }
 
 /* ============================ Flare ============================ */
@@ -189,18 +204,18 @@ export function gateFor(days, dateStr, s) {
 // state, plus a crash logged this evening. Looks back 60 days.
 export function flareOn(days, dateStr, s, today) {
   const upto = dateStr < today ? dateStr : today;
-  let active = false, start = null, reds = 0, goods = 0;
+  let active = false, start = null, endedOn = null, reds = 0, goods = 0;
   for (let d = parseISO(shiftISO(upto, -60)), end = parseISO(upto); d <= end; d = addDays(d, 1)) {
     const k = iso(d), e = days[k], prev = days[shiftISO(k, -1)];
-    if (prev && prev.evening && prev.evening.crash && !active) { active = true; start = k; goods = 0; }
+    if (prev && prev.evening && prev.evening.crash && !active) { active = true; start = k; endedOn = null; goods = 0; }
     if (!e || !e.morning) { reds = 0; goods = 0; continue; }
     const g = gateFor(days, k, s);
-    if (g.red.length) { reds++; goods = 0; if (!active && reds >= 2) { active = true; start = k; } }
-    else if (g.good) { goods++; reds = 0; if (active && goods >= 2) { active = false; start = null; } }
+    if (g.red.length) { reds++; goods = 0; if (!active && reds >= 2) { active = true; start = k; endedOn = null; } }
+    else if (g.good) { goods++; reds = 0; if (active && goods >= 2) { active = false; start = null; endedOn = k; } }
     else { reds = 0; goods = 0; }
   }
   if (!active && dateStr > today && days[today] && days[today].evening && days[today].evening.crash) { active = true; start = shiftISO(today, 1); }
-  return { active, start, length: active ? daysBetween(parseISO(start), parseISO(dateStr > today ? dateStr : upto)) + 1 : 0 };
+  return { active, start, endedOn: active ? null : endedOn, length: active ? daysBetween(parseISO(start), parseISO(dateStr > today ? dateStr : upto)) + 1 : 0 };
 }
 
 /* ============================ The plan for a day ============================ */
@@ -218,12 +233,13 @@ export function stepLimits(plan, base) {
   const rest = num(st.rest) != null ? num(st.rest) : (open != null ? round100(open * 0.5) : null);
   return { open, session, rest };
 }
-// Session length: a little longer each week since the plan started, not counting the week before a period.
+// Session length: a little longer for every 7 days since the plan started. With a cycle tracked, only days 4 to the
+// end of the follicular phase count: progression waits through a period and holds from mid-cycle.
 export function sessionMinutes(plan, dateStr, s, today) {
   const S = plan.session;
   if (!num(S.addPerWeek) || !isDate(plan.start) || dateStr <= plan.start) return num(S.minutes) || 0;
   let n = 0;
-  for (let d = parseISO(plan.start), end = parseISO(dateStr); d < end; d = addDays(d, 1)) { const c = cycleOf(iso(d), s, today); if (!(c && c.late)) n++; }
+  for (let d = parseISO(plan.start), end = parseISO(dateStr); d < end; d = addDays(d, 1)) { const c = cycleOf(iso(d), s, today); if (!c || (c.phase === "follicular" && c.day >= 4)) n++; }
   return Math.min(num(S.maxMinutes) || num(S.minutes), num(S.minutes) + num(S.addPerWeek) * Math.floor(n / 7));
 }
 export function fmtBed(t) {
@@ -234,40 +250,60 @@ export function fmtBed(t) {
 }
 const n0 = v => Math.round(v).toLocaleString("en-US");
 
-// Everything the day asks for. With a check-in, the morning check can turn a day into rest or a light session, and
-// plans can move a session off; without one, the week's plan. A flare replaces both.
+// Everything the day asks for. Without a check-in, the week's plan. With one, the checks run in order: a short night
+// or a red line makes it a rest day; a day without a session stays one; plans make it a busy day, though light plans
+// with people in them leave room for the floor set; a planned rest day stays one; an amber line makes it a light day.
+// A flare replaces all of it. After a flare, steps stay 1,000 lower for 3 days and sessions are a week back for 7.
+// In the luteal phase, the POTS plan runs at 80 percent.
 export function planFor(dateStr, s, days, today) {
-  const P = s.plan, T = TEMPLATES[P.template] || TEMPLATES.pacing, L = limitsOf(s);
+  const P = s.plan, T = TEMPLATES[P.template] || TEMPLATES.pacing, L = limitsOf(s), F = Object.assign({}, FLOOR, P.floor), floorPlan = usesFloor(P);
   const afterTravel = plansOf(days[shiftISO(dateStr, -1)]).travel > 0;
   const kind = afterTravel ? "rest" : (P.week[DOW[parseISO(dateStr).getDay()]] || "open");
   const entry = days[dateStr] || {}, checkedIn = !!entry.morning;
   const base = baselines(days, dateStr), r = readingsOf(entry), steps = stepLimits(P, base);
-  const plans = plansOf(entry), load = planLoad(plans);
-  const busy = checkedIn && (plans.meetings + plans.events + plans.travel > 0 || (steps.open != null && load > steps.open / 2));
-  const g = checkedIn ? gate(r, base, L, hasCondition(s, "pots")) : null;
-  const fl = flareOn(days, dateStr, s, today);
-  let type, why = [];
+  const plans = plansOf(entry), load = planLoad(plans), half = steps.open != null ? steps.open / 2 : Infinity;
+  const social = plans.meetings + plans.events > 0, busy = checkedIn && (social || plans.travel > 0 || load > half);
+  const g = checkedIn ? gate(r, base, L, hasCondition(s, "pots"), scaleWord(s)) : null;
+  const fl = flareOn(days, dateStr, s, today), cyc = cycleOf(dateStr, s, today), luteal = !!(cyc && cyc.phase === "luteal" && T.luteal);
+  const sinceExit = fl.endedOn ? daysBetween(parseISO(fl.endedOn), parseISO(dateStr)) : -1;
+  const resume = { steps: !fl.active && sinceExit >= 0 && sinceExit < 3, volume: !fl.active && sinceExit >= 0 && sinceExit < 7 };
+  let type, why = [], room = false;
   if (fl.active) type = "flare";
-  else if (!g) type = kind;
+  else if (!g) type = isSessionKind(kind) ? "session" : kind;
   else if (g.short) { type = "rest"; why = [`${r.sleep} hours of sleep`]; }
   else if (g.red.length) { type = "rest"; why = g.red; }
+  else if (kind === "open") type = "open";
+  else if (busy) { room = floorPlan && isSessionKind(kind) && social && !plans.travel && load <= half && !g.amber.length; type = room ? "light" : "open"; }
   else if (kind === "rest") type = "rest";
-  else if (busy || kind === "open") type = "open";
   else if (g.amber.length) { type = "light"; why = g.amber; }
   else type = "session";
 
-  const minutes = sessionMinutes(P, dateStr, s, today);
-  const ceiling = type === "session" || type === "light" ? steps.session : (type === "open" ? steps.open : steps.rest);
-  const label = { flare: "Flare", rest: g && g.short ? "Rest day, short night" : "Rest day", open: busy ? "Busy day" : "No session", light: "Light day", session: P.session.day || T.session.day }[type];
-  const short = { flare: "Flare", rest: "Rest", open: busy ? "Busy" : "", light: "Light", session: P.session.short || T.session.short }[type];
-  const tone = type === "session" ? "blue" : (type === "light" ? "plum" : (type === "rest" || type === "flare" ? "rest" : "free"));
+  // The day's sessions, as the week says. A light day is the floor set when the plan has one, else half the session.
+  let minutes = sessionMinutes(P, dateStr, s, today);
+  if (resume.volume) minutes = Math.max(num(P.session.minutes) || 0, minutes - (num(P.session.addPerWeek) || 0));
+  if (luteal) minutes = Math.round(minutes * T.luteal);
+  const main = { kind: "session", title: P.session.title, short: P.session.short || T.session.short, minutes, how: P.session.how || T.session.how || [] };
+  const floor = { kind: "floor", title: F.title, short: "Floor", minutes: num(F.minutes) || FLOOR.minutes, how: F.how || FLOOR.how };
+  let training = [];
+  if (type === "session") training = kind === "both" ? [main, floor] : (kind === "floor" ? [floor] : [main]);
+  else if (type === "light") training = [floorPlan ? Object.assign({}, floor, { minutes: Math.min(15, floor.minutes), easy: true }) : Object.assign({}, main, { minutes: Math.max(5, Math.round(minutes / 2)), easy: true })];
+
+  let ceiling = type === "open" || room ? steps.open : (type === "session" || type === "light" ? steps.session : steps.rest);
+  if (ceiling != null && luteal) ceiling = Math.round(ceiling * T.luteal / 100) * 100;
+  if (ceiling != null && resume.steps && type !== "flare") ceiling = Math.max(steps.rest != null ? Math.min(steps.rest, ceiling) : 0, ceiling - 1000);
+  const onlyFloor = training.length > 0 && training.every(t => t.kind === "floor");
+  const label = { flare: "Flare", rest: g && g.short ? "Rest day, short night" : "Rest day", open: busy ? "Busy day" : "No session", light: "Light day", session: onlyFloor ? (F.day || "Floor day") : (P.session.day || T.session.day) }[type];
+  // The words the calendar shows: the sessions, else rest, flare or busy. A day with no session and no plans has none.
+  const words = type === "session" || type === "light" ? training.map(t => t.kind === "floor" ? "Floor" : (t.easy ? "Light" : t.short)) : ({ flare: ["Flare"], rest: ["Rest"], open: busy ? ["Busy"] : [] }[type]);
+  const short = words[0] || "";
+  const tone = type === "rest" || type === "flare" ? "rest" : (type === "session" && !onlyFloor ? "blue" : (training.length ? "plum" : "free"));
 
   const lines = [];
-  if (ceiling != null) lines.push(`Up to ${n0(ceiling)} steps` + (load ? `; your plans take about ${n0(load)}` : ""));
-  if (type === "session") lines.push(`${P.session.title}, ${minutes} min`);
-  if (type === "light") lines.push(`${P.session.title}, ${Math.max(5, Math.round(minutes / 2))} min, easy`);
+  if (ceiling != null) lines.push(`Up to ${n0(ceiling)} steps` + (load ? `; your plans take about ${n0(load)}` : "") + (resume.steps && type !== "flare" ? ". The limit is lower for a few days after the flare" : ""));
+  if (training.length) training.forEach(t => lines.push(`${t.title}, ${t.minutes} min${t.easy ? ", easy" : ""}`));
+  else if (type === "rest" || type === "flare") lines.push("No training");
   const cap = hrCap(s, base, today);
-  if ((type === "session" || type === "light") && cap != null) lines.push(`Keep your heart rate under ${cap}`);
+  if (training.length && cap != null) lines.push(`Keep your heart rate under ${cap}`);
   if (fmtBed(P.bedtime)) lines.push(`In bed by ${fmtBed(P.bedtime)}`);
   if (P.note) lines.push(P.note);
   const notes = [];
@@ -275,8 +311,10 @@ export function planFor(dateStr, s, days, today) {
   else if (type === "rest" && g && g.short) notes.push("Lie down in the afternoon if you can.");
   else if (type === "rest" && g && g.red.length) notes.push("Check in again tomorrow morning.");
   else if (type === "rest" && afterTravel) notes.push("A rest day after yesterday's travel.");
-  else if (type === "open" && busy && kind === "session") notes.push("Your plans take the place of today's session.");
-  return { date: dateStr, type, kind, label, short, tone, why, lines, notes, ceiling, minutes, checkedIn, plans, load, base, flare: fl, cycle: cycleOf(dateStr, s, today), readings: r, gate: g };
+  else if (room) notes.push(`Your plans take the place of today's ${String(main.short).toLowerCase()} session.`);
+  else if (type === "open" && busy && isSessionKind(kind)) notes.push("Your plans take the place of today's session.");
+  if (ceiling != null && load > ceiling && type !== "flare") notes.push("Your plans may take more steps than today's limit. Can one move?");
+  return { date: dateStr, type, kind, label, short, words, tone, why, lines, notes, training, room, ceiling, minutes, checkedIn, plans, load, base, flare: fl, resume, cycle: cyc, readings: r, gate: g };
 }
 
 /* ============================ Training a day held ============================ */
@@ -287,8 +325,9 @@ const SPORT_WORD = [[/swim/, "Pool"], [/(strength|weight|powerlifting|functional
   [/(soccer|football)/, "Soccer"], [/tennis/, "Tennis"], [/hik/, "Hike"], [/elliptical/, "Ellip"]];
 export function sessionsDone(entry, plan) {
   const words = [], add = w => { if (w && !words.includes(w)) words.push(w); };
-  const ev = (entry && entry.evening) || {};
-  if (ev.session === "full") add((plan && plan.session && plan.session.short) || "Session");
+  const ev = (entry && entry.evening) || {}, main = (plan && plan.session && plan.session.short) || "Session";
+  if (ev.session === "full" || ev.session === "cardio" || ev.session === "both") add(main);
+  if (ev.session === "floor" || ev.session === "both") add("Floor");
   if (ev.session === "light") add("Light");
   ((entry && entry.wearable && entry.wearable.workouts) || []).forEach(w => {
     const t = String(w && w.name || "").toLowerCase(), hit = SPORT_WORD.find(([re]) => re.test(t));
@@ -391,11 +430,18 @@ export function exportCSV(days, s, today) {
 
 /* ============================ Setup: answers into a plan ============================ */
 const joinOr = a => a.length <= 1 ? (a[0] || "") : a.slice(0, -1).join(", ") + " or " + a[a.length - 1];
+// Distinct orderings of a list, the given order first.
+function orderings(list) {
+  if (list.length <= 1) return [list.slice()];
+  const out = [], seen = new Set();
+  list.forEach((k, i) => { if (seen.has(k)) return; seen.add(k); orderings(list.slice(0, i).concat(list.slice(i + 1))).forEach(r => out.push([k].concat(r))); });
+  return out;
+}
 // The template's number of session and rest days, placed on the days the person is home: sessions spread out, rest
-// after sessions when pacing, else at the weekend.
+// after sessions when pacing, else at the weekend. Floor sets keep a day between them where they can.
 export function weekFor(template, outDays = []) {
   const T = TEMPLATES[template] || TEMPLATES.pacing;
-  const nSession = WEEK.filter(d => T.week[d] === "session").length, nRest = WEEK.filter(d => T.week[d] === "rest").length;
+  const kinds = WEEK.map(d => T.week[d]).filter(isSessionKind), nSession = kinds.length, nRest = WEEK.filter(d => T.week[d] === "rest").length;
   const home = WEEK.filter(d => !outDays.includes(d)), sessions = [];
   for (let i = 0; i < home.length && sessions.length < nSession; i += 2) sessions.push(home[i]);
   for (let i = 1; i < home.length && sessions.length < nSession; i += 2) sessions.push(home[i]);
@@ -404,7 +450,11 @@ export function weekFor(template, outDays = []) {
   const rank = d => template === "pacing" ? (afterSession(d) ? 0 : (d === "sun" ? 1 : 2)) : (d === "sun" ? 0 : (d === "sat" ? 1 : 2));
   const rests = left.slice().sort((a, b) => rank(a) - rank(b) || WEEK.indexOf(a) - WEEK.indexOf(b)).slice(0, nRest);
   const week = {};
-  WEEK.forEach(d => { week[d] = sessions.includes(d) ? "session" : (rests.includes(d) ? "rest" : "open"); });
+  const ordered = sessions.slice().sort((a, b) => WEEK.indexOf(a) - WEEK.indexOf(b));
+  const nextTo = (a, b) => [1, 6].includes(Math.abs(WEEK.indexOf(a) - WEEK.indexOf(b)));
+  const spaced = o => !ordered.some((d, i) => isFloorKind(o[i]) && ordered.some((e, j) => j > i && isFloorKind(o[j]) && nextTo(d, e)));
+  const fit = orderings(kinds.slice(0, ordered.length)).find(spaced) || kinds;
+  WEEK.forEach(d => { week[d] = ordered.includes(d) ? fit[ordered.indexOf(d)] : (rests.includes(d) ? "rest" : "open"); });
   return week;
 }
 // The session in the person's own terms: the template's kind of activity, done with what they have.
@@ -422,6 +472,11 @@ export function sessionFor(template, exercise = [], goodDay = "") {
   if (g) S.minutes = template === "pacing" ? (goodDay === "lt10" ? 5 : 10) : Math.min(g[2], S.maxMinutes);
   S.maxMinutes = Math.max(S.minutes, S.maxMinutes);
   return S;
+}
+export function floorFor(exercise = []) {
+  const F = Object.assign({}, FLOOR, { how: FLOOR.how.slice() });
+  if (exercise.includes("gym")) { F.title = "Strength set, lying or seated: bands or light weights"; F.how = ["2 sets of 12 to 15 slow reps: leg press or bridges, rows, chest press, calf raises.", "Bands before weights; rest with your legs up between sets.", "Stop if your heart rate passes the guide or you feel faint."]; }
+  return F;
 }
 // Medians before and since the start of the illness or injury: up to 90 days before, everything after.
 export function beforeAfter(days, onset) {
@@ -460,6 +515,8 @@ export function settingsFromAnswers(a, today) {
   const plan = newPlan(template, today);
   plan.week = weekFor(template, a.outDays || []);
   plan.session = sessionFor(template, a.exercise || [], a.goodDay || "");
+  plan.floor = floorFor(a.exercise || []);
+  if (/^\d{1,2}:\d{2}$/.test(a.bedtime || "")) plan.bedtime = a.bedtime;
   const track = asksCycle(a) && a.cycle === "yes", age = num(a.age);
   return Object.assign({}, DEFAULT_SETTINGS, {
     onboarded: true, conditions, pem, plan,
