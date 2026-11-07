@@ -1,0 +1,10 @@
+{
+  "name": "pots-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine. Your data stays on your phone.",
+  "license": "MIT",
+  "scripts": { "test": "node --test tests/*.test.mjs" },
+  "engines": { "node": ">=20" }
+}
