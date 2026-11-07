@@ -115,7 +115,7 @@ function viewToday() {
 function planWords(p) { return p.short ? [p.short] : []; }
 function wordTone(w, p) {
   if (w === "Rest" || w === "Flare") return "rest";
-  if (w === "Busy" || w === "Migraine") return "free";
+  if (w === "Busy") return "free";
   if (w === "Light") return "plum";
   return w === (S().plan.session.short || "") || w === "Session" ? "blue" : "plum";
 }
@@ -128,11 +128,12 @@ function dayMark(k, p) {
     const e = store.days[k] || {};
     words = C.sessionsDone(e, S().plan);
     if (!words.length && (p.checkedIn || p.type === "flare") && ["Rest", "Flare", "Busy"].includes(p.short)) words = [p.short];
-    if (e.evening && e.evening.migraine) words.push("Migraine");
   }
+  // A migraine day is a dot in the corner, so it doesn't crowd out what the day held.
+  const mig = k <= todayISO() && !!((store.days[k] || {}).evening || {}).migraine;
   words = words.slice(0, 2);
   const tone = words.length ? wordTone(words[0], p) : "";
-  return { cls: tone && tone !== "free" ? "bg-" + tone : "", html: words.map(w => `<span class="w tone-${wordTone(w, p)}">${esc(w)}</span>`).join("") };
+  return { cls: tone && tone !== "free" ? "bg-" + tone : "", html: words.map(w => `<span class="w tone-${wordTone(w, p)}${w.length > 5 ? " long" : ""}">${esc(w)}</span>`).join("") + (mig ? `<span class="mig" title="Migraine"></span>` : "") };
 }
 function phaseBar(c) { return !c ? "" : (c.period ? "period" : (c.late ? "late" : "")); }
 function weekCard() {
@@ -276,7 +277,8 @@ function viewCalendar() {
     cells += `<div class="cal-day ${d.getMonth() !== m.getMonth() ? "other" : ""} ${ds === t ? "today" : ""} ${ds === sel ? "sel" : ""} ${mk.cls}" data-date="${ds}"><span class="d num">${d.getDate()}</span>${mk.html}<span class="ph ${phaseBar(p.cycle)}"></span></div>`;
   }
   const cyc = S().cycle.track ? `<span><i class="bar period"></i>Period</span><span><i class="bar late"></i>Week before</span>` : "";
-  const legend = `<div class="legend"><span class="lg bg-blue tone-blue">${esc(S().plan.session.short)}</span><span class="lg bg-plum tone-plum">Light and other exercise</span><span class="lg bg-rest tone-rest">Rest</span>${cyc}</div>`;
+  const mig = C.hasCondition(S(), "migraine") ? `<span><i class="mig-key"></i>Migraine</span>` : "";
+  const legend = `<div class="legend"><span class="lg bg-blue tone-blue">${esc(S().plan.session.short)}</span><span class="lg bg-plum tone-plum">Light and other exercise</span><span class="lg bg-rest tone-rest">Rest</span>${mig}${cyc}</div>`;
   const label = m.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   return `<div class="card"><div class="cal-head"><button class="btn quiet" data-act="cal-prev">‹ Prev</button><h2>${esc(label)}</h2><button class="btn quiet" data-act="cal-next">Next ›</button></div>
     <div class="cal-grid">${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(x => `<div class="cal-dow">${x}</div>`).join("")}${cells}</div>${legend}</div>` + calendarBox(sel);
