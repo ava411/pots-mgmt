@@ -5,6 +5,21 @@
   "type": "module",
   "description": "A daily plan and log for POTS, long COVID, post-concussion symptoms and migraine. Your data stays on your phone.",
   "license": "MIT",
-  "scripts": { "test": "node --test tests/*.test.mjs" },
-  "engines": { "node": ">=20" }
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "ios:sync": "cap sync ios"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
 }

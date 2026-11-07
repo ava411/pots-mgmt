@@ -5,7 +5,11 @@ const { SYMPTOMS, CONDITIONS, TEMPLATES, WEEK, PLAN_LABEL, todayISO, shiftISO, p
 
 /* ============================ The iPhone layer, when present ============================ */
 const cap = window.Capacitor, NATIVE = !!(cap && cap.isNativePlatform && cap.isNativePlatform());
-const plugin = name => (NATIVE && cap.Plugins && cap.Plugins[name]) || null;
+// Plugins without a JavaScript package here are reached by name through Capacitor's bridge.
+const plugin = name => {
+  if (!NATIVE) return null;
+  try { return (cap.Plugins && cap.Plugins[name]) || (cap.registerPlugin ? cap.registerPlugin(name) : null); } catch (e) { return null; }
+};
 const Health = plugin("HealthData"), Notes = plugin("LocalNotifications"), Files = plugin("Filesystem"), Share = plugin("Share");
 
 /* ============================ Storage: this device only ============================ */

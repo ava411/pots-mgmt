@@ -44,6 +44,16 @@ The iPhone app schedules its own reminders on the phone. On the web version, Set
 - **Web:** open the site on your phone and add it to your home screen. On an iPhone, the home-screen app keeps its data more reliably than a Safari tab.
 - **iPhone app:** coming to the App Store.
 
+## iPhone app
+
+`ios/` is a [Capacitor](https://capacitorjs.com) project around `public/`. It adds what a web page can't do on an iPhone:
+
+- **Apple Health.** A small Swift plugin (in `ios/App/App/AppDelegate.swift`) reads resting heart rate, HRV, sleep, steps, workouts and period days, one summary per day, on the phone.
+- **Reminders** that the phone schedules itself.
+- **Sharing** backups and spreadsheets through the share sheet.
+
+To build it: `npm install`, `npx cap sync ios`, open `ios/App/App.xcodeproj` in Xcode, choose your team, and run it on a phone. Turn on HealthKit for your App ID in the Apple Developer portal; the app's entitlement is already in `App/App.entitlements`. GitHub Actions makes an unsigned simulator build on every push, to show it compiles.
+
 ## Run your own copy
 
 The app is a static site in `public/`, with no build step. Any static host works; `vercel.json` sets the security headers on Vercel.
@@ -58,6 +68,7 @@ npm test        # the plan engine, WHOOP files, calendar file and spreadsheet ex
 - `public/app.js`: the screens, storage on the device, and the bridges to the iPhone app.
 - `public/index.html`: the page and its styles. `sw.js` keeps the app working offline.
 - `tests/`: unit tests (`node --test`, no dependencies).
+- `ios/`: the iPhone app (Capacitor). `capacitor.config.json` points it at `public/`.
 
 ## License
 

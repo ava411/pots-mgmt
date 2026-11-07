@@ -1,0 +1,9 @@
+{
+  "appId": "com.ava411.potstracker",
+  "appName": "POTS Tracker",
+  "webDir": "public",
+  "backgroundColor": "#EDF1F2",
+  "ios": {
+    "contentInset": "never"
+  }
+}

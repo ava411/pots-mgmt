@@ -25,5 +25,6 @@ POTS Tracker: a public, open-source daily plan and log for POTS, long COVID, pos
 - `public/core.js` is pure and tested (`npm test`). Put logic there, not in `app.js`.
 - `public/app.js` holds the screens, storage (localStorage, keys `pt.settings`, `pt.days`, `pt.notNow`) and the bridges to Capacitor plugins (`HealthData`, `LocalNotifications`, `Filesystem`, `Share`), all optional.
 - No build step and no runtime dependencies for the web app.
+- `ios/` is the Capacitor iPhone project (Swift Package Manager). The Apple Health plugin and `MainViewController`, which registers it, live in `ios/App/App/AppDelegate.swift`, so no Xcode project edits are needed for them. After changing `public/`, run `npx cap sync ios`. CI (`.github/workflows/ci.yml`) runs the tests and an unsigned simulator build on macOS.
 - Dates are local `YYYY-MM-DD`; never `toISOString` for calendar dates.
 - Writing: no em or en dashes; short sentences; sentence case.
