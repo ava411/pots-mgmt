@@ -13,7 +13,10 @@ const plugin = name => {
 const Health = plugin("HealthData"), Notes = plugin("LocalNotifications"), Files = plugin("Filesystem"), Share = plugin("Share");
 
 /* ============================ Storage: this device only ============================ */
-const KEY = { settings: "pt.settings", days: "pt.days", notNow: "pt.notNow" };
+const KEY = { settings: "pt.settings", days: "pt.days", notNow: "pt.notNow", savedAt: "pt.savedAt" };
+// In the iPhone app, iOS may clear a web view's storage when the phone runs low on space, so every save also goes to a
+// file in Library/NoCloud: kept on the phone, never cleared by iOS, and left out of iCloud and computer backups.
+const FILE = { path: "pots-tracker.json", directory: "LIBRARY_NO_CLOUD" };
 function normalize(s) {
   const out = Object.assign({}, C.DEFAULT_SETTINGS, s && typeof s === "object" ? s : {});
   out.conditions = Array.isArray(out.conditions) ? out.conditions.filter(c => CONDITIONS.some(x => x[0] === c)) : [];
@@ -28,17 +31,39 @@ function normalize(s) {
   return out;
 }
 const store = {
-  settings: normalize(null), days: {}, ok: true,
+  settings: normalize(null), days: {}, savedAt: 0, ok: true,
   load() {
     try {
       this.settings = normalize(JSON.parse(localStorage.getItem(KEY.settings) || "null"));
       const d = JSON.parse(localStorage.getItem(KEY.days) || "{}");
       this.days = d && typeof d === "object" && !Array.isArray(d) ? d : {};
+      this.savedAt = Number(localStorage.getItem(KEY.savedAt)) || 0;
     } catch (e) { this.ok = false; }
   },
-  write() {
-    try { localStorage.setItem(KEY.settings, JSON.stringify(this.settings)); localStorage.setItem(KEY.days, JSON.stringify(this.days)); this.ok = true; }
+  // The iPhone app's file: whichever copy was saved last wins, so anything the web view lost comes back, and a file
+  // that is missing or older than the web view's copy is written again.
+  async loadFile() {
+    if (!Files) return;
+    let f = null;
+    try { f = JSON.parse((await Files.readFile(Object.assign({ encoding: "utf8" }, FILE))).data); } catch (e) { f = null; }
+    if (!(f && f.settings)) f = null;
+    const fileAt = f ? Number(f.savedAt) || 0 : 0, hasLocal = this.settings.onboarded || Object.keys(this.days).length > 0;
+    if (f && fileAt > this.savedAt) {
+      this.settings = normalize(f.settings); this.days = f.days && typeof f.days === "object" ? f.days : {}; this.savedAt = fileAt;
+      this.writeLocal();
+    } else if (hasLocal && (!f || fileAt < this.savedAt)) this.writeFile();
+  },
+  writeFile() {
+    if (Files) Files.writeFile(Object.assign({ encoding: "utf8", recursive: true, data: JSON.stringify({ app: "pots-tracker", savedAt: this.savedAt, settings: this.settings, days: this.days }) }, FILE)).catch(() => {});
+  },
+  writeLocal() {
+    try { localStorage.setItem(KEY.settings, JSON.stringify(this.settings)); localStorage.setItem(KEY.days, JSON.stringify(this.days)); localStorage.setItem(KEY.savedAt, String(this.savedAt || 0)); this.ok = true; }
     catch (e) { this.ok = false; }
+  },
+  write() {
+    this.savedAt = Date.now();
+    this.writeLocal();
+    this.writeFile();
     // Ask the browser to keep this data rather than clear it when space runs low.
     if (navigator.storage && navigator.storage.persist && !this.asked) { this.asked = true; navigator.storage.persist().catch(() => {}); }
   },
@@ -57,7 +82,11 @@ const store = {
     return n;
   },
   replaceAll(data) { this.settings = normalize(data.settings); this.days = data.days || {}; this.write(); },
-  clear() { try { Object.values(KEY).forEach(k => localStorage.removeItem(k)); } catch (e) {} this.settings = normalize(null); this.days = {}; }
+  clear() {
+    try { Object.values(KEY).forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    if (Files) Files.deleteFile(FILE).catch(() => {});
+    this.settings = normalize(null); this.days = {}; this.savedAt = 0;
+  }
 };
 
 /* ============================ Helpers ============================ */
@@ -493,7 +522,7 @@ function viewSettings() {
     <div id="s-cycle-more"${s.cycle.track ? "" : " hidden"}><label class="f" for="s-starts">Period start dates, oldest first</label><input type="text" id="s-starts" value="${esc(C.cycleStarts(s).join(", "))}" placeholder="YYYY-MM-DD">
     ${numIn("s-len", "Usual cycle length (days)", s.cycle.length)}</div>
     <div style="margin-top:12px"><button class="btn primary block" data-act="save-cycle">Save</button></div></div>`;
-  out += `<div class="card"><h2>Data</h2><p>Everything stays on this phone. Save a backup now and then, and keep it somewhere safe.</p>
+  out += `<div class="card"><h2>Data</h2><p>${NATIVE ? "Everything stays on this phone, and out of iCloud. Save a backup now and then, and before you change phones." : "Everything stays on this phone. Save a backup now and then, and keep it somewhere safe."}</p>
     <div class="actions"><button class="btn block" data-act="backup">Save a backup</button><label class="btn block" for="s-restore">Restore a backup</label><input type="file" id="s-restore" accept=".json,application/json" hidden><button class="btn block" data-act="csv">Download a spreadsheet</button><button class="btn quiet block danger" data-act="wipe">Delete everything</button></div><p class="small" style="margin-top:10px"><a href="privacy.html">Privacy policy</a></p></div>`;
   const health = Health ? `<p>Sleep, heart rate, HRV, steps, workouts and periods from Apple Health. Apple Watch and WHOOP both write there.</p><button class="btn primary block" data-act="health-connect">${s.health ? "Read Apple Health now" : "Connect Apple Health"}</button>` : "";
   out += `<div class="card"><h2>Wearables</h2>${health}
@@ -535,11 +564,15 @@ function viewSettings() {
 /* ============================ Files out ============================ */
 async function saveFile(name, text, type) {
   if (Files && Share) {
+    let written = false;
     try {
       const r = await Files.writeFile({ path: name, data: text, directory: "CACHE", encoding: "utf8" });
+      written = true;
       await Share.share({ title: name, url: r.uri });
       return;
     } catch (e) { if (e && /cancel/i.test(String(e.message || e))) return; }
+    // The copy handed to the share sheet holds health data, so it goes as soon as the sheet closes.
+    finally { if (written) Files.deleteFile({ path: name, directory: "CACHE" }).catch(() => {}); }
   }
   const blob = new Blob([text], { type }), url = URL.createObjectURL(blob), a = document.createElement("a");
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 2000);
@@ -764,8 +797,9 @@ $("app").addEventListener("click", async e => {
 
 /* ============================ Start ============================ */
 store.load();
-render();
 (async () => {
+  await store.loadFile();
+  render();
   const asked = new URLSearchParams(location.search).get("checkin");
   if (S().health) { const n = await readHealth(7); if (n) softRender(); }
   if (asked) { try { history.replaceState(null, "", location.pathname); } catch (x) {} openCheckin(asked); return; }

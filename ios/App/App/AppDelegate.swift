@@ -8,7 +8,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        keepHealthDataOutOfBackups()
         return true
     }
 
@@ -45,6 +45,22 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 }
 
 // MARK: - POTS Tracker native layer
+
+/// People's health data stays on the phone and out of iCloud and computer backups (App Store Review Guideline
+/// 5.1.3(ii): no personal health information in iCloud). The web app keeps it in the web view's storage, under
+/// Library/WebKit, and in a file in Library/NoCloud; both folders are marked as excluded from backup on every launch.
+/// A backup saved from Settings is how someone moves their data to a new phone.
+func keepHealthDataOutOfBackups() {
+    let files = FileManager.default
+    guard let library = files.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+    for name in ["WebKit", "NoCloud"] {
+        var folder = library.appendingPathComponent(name, isDirectory: true)
+        try? files.createDirectory(at: folder, withIntermediateDirectories: true)
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? folder.setResourceValues(values)
+    }
+}
 
 /// The app's main screen: Capacitor's web view, with the Apple Health plugin registered.
 class MainViewController: CAPBridgeViewController {

@@ -9,6 +9,7 @@ POTS Tracker: a public, open-source daily plan and log for POTS, long COVID, pos
 - Keep the content security policy strict (in `public/index.html` and `vercel.json`): `connect-src 'self'` and nothing that sends data elsewhere.
 - Wearable data comes in on the device only: Apple Health in the iPhone app, WHOOP's export file in either version. No WHOOP API or other cloud sync unless it runs on the user's own device without an intermediary server.
 - Reminders are scheduled on the device (local notifications), or given as a calendar file.
+- In the iPhone app, data is saved twice: in the web view's storage, and in a file in Library/NoCloud (`pots-tracker.json`) that iOS never clears. Both folders are excluded from iCloud and computer backups at launch (`keepHealthDataOutOfBackups` in `AppDelegate.swift`). Copies handed to the share sheet are deleted when it closes.
 - The repository holds no personal data: no logs, no real dates of anyone's cycle, no doctor names, no one's baselines.
 
 ## Interface principles (from the owner)
